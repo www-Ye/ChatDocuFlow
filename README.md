@@ -2,7 +2,7 @@
 
 This is a document management system that allows users to add all PDFs in a folder, and then index them using OpenAI's embedding technology. The system can also generate summaries for each page using ChatGPT. Users can search the documents by querying for keywords, or by searching for specific pages.
 
-Future plans include adding attributes and semantic tags to documents/pages, as well as implementing interactive Q&A with documents/pages.
+The project may plan to implement document/page-based question answering and conversational retrieval in the future.
 
 ### Configuration
 
@@ -56,7 +56,7 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 这是一个文档管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。系统还可以使用ChatGPT为每个页面生成摘要。用户可以通过查询关键字或搜索特定页面来搜索文档。
 
-未来计划包括向文档/页面添加属性和语义标签，以及实现与文档/页面的交互问答。
+项目未来可能打算实现针对文档/页面的问答，以及对话式检索。
 
 ### 配置
 
