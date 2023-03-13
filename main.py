@@ -6,15 +6,15 @@ import os
 
 search_help = '''The query should be entered in the following format:
 
-query=[] tag=[] no_tag=[] property=[] no_property=[]
+query=[] tag=[] no_tag=[] attribute=[] no_attribute=[]
 
 All parts items cannot be omitted at the same time. Multiple tags can be separated by ',' in [].
 
 * "query=[]" specifies a search query that you want to perform.
 * "tag=[]" specifies a list of semantic tags that the documents should have.
 * "no_tag=[]" specifies a list of semantic tags that the documents should not have.
-* "property=[]" specifies a list of document properties and their values that the documents should have.
-* "no_property=[]" specifies a list of document properties and their values that the documents should not have.
+* "attribute=[]" specifies a list of document attributes and their values that the documents should have.
+* "no_attribute=[]" specifies a list of document attributes and their values that the documents should not have.
 
 Press Enter to go back to the previous level.'''
 
@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--password", default="neo4j", type=str)
     parser.add_argument("--db_name", default="", type=str)
     parser.add_argument("--language", default="Chinese", type=str)
+    parser.add_argument("--range_distance", default=0.6, type=float, help="The retrieval threshold returns higher similarity for closer distances.")
 
     parser.add_argument("--openai_key", default="", type=str)
     parser.add_argument("--proxy", default="", type=str)
@@ -34,7 +35,7 @@ def main():
     args = parser.parse_args()
     
     print('*Welcome to Document Management*')
-    
+
     DM = Doc_Management(args)
 
     while True:
@@ -66,7 +67,7 @@ Press Enter key to exit.''')
                     break
 
                 try:
-                    names, _ = DM.semantic_search(op, 'doc')
+                    res = DM.semantic_search(op, 'doc')
                 except Exception as e:
                     print("An error occurred:", e.__class__.__name__)
 
@@ -74,15 +75,56 @@ Press Enter key to exit.''')
                 op = input()
                 
                 try:
-                    name = names[int(op)]
+                    select = res[int(op)]
+                    print('open')
+                    print(select)
+                    name = select['name']
                     win32api.ShellExecute(0, 'open', os.path.join(args.doc_dir, name), '', '', 1)
                 except Exception as e:
                     print("An error occurred:", e.__class__.__name__)
 
-                print('If you want to display a summary of each page of the document, enter 1.')
+                print('If you want to display a summary of each page of the document, enter 1. Otherwise, press Enter.')
                 op = input()
                 if op == '1':
-                    DM.doc_pages(name)
+                    DM.get_doc_pages(name)
+
+                while True:
+                    print('''Manually add semantic tags and attributes, multiple tags can be separated by commas, and the specific format is as follows:
+* Add semantic tags: add_tag xxx,xxx
+* Delete semantic tags: del_tag xxx,xxx
+* Add attributes: add_att xxx,xxx
+* Delete attributes: del_att xxx,xxx
+Press Enter to return.''')
+                
+                    op = input()
+
+                    act = op.split(' ')
+
+                    if len(act) > 1:
+                        act_type = act[0]
+                        tag_att = act[1].replace(' ', '').split(',')
+
+                        if act_type == 'add_tag':
+                            DM.add_semantic_tag(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'del_tag':
+                            DM.del_semantic_tag(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'add_att':
+                            DM.add_attribute(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'del_att':
+                            DM.del_attribute(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        else:
+                            print('input error, try again')
+                    else:
+                        break
+
 
         elif op == '2':
             while True:
@@ -93,7 +135,7 @@ Press Enter key to exit.''')
                     break
 
                 try:
-                    names, page_ids = DM.semantic_search(op, 'page')
+                    res = DM.semantic_search(op, 'page')
                 except Exception as e:
                     print("An error occurred:", e.__class__.__name__)
 
@@ -104,11 +146,51 @@ Press Enter key to exit.''')
                     # file_path_with_page = '{}#page={}'.format(paths[int(op)], page_ids[int(op)])
                     # print(file_path_with_page)
                     # win32api.ShellExecute(0, 'open', file_path_with_page, '', '', 1)
-                    name = names[int(op)]
+                    select = res[int(op)]
+                    print('open')
+                    print(select)
+                    name = select['name']
                     win32api.ShellExecute(0, 'open', os.path.join(args.doc_dir, name), '', '', 1)
                 except Exception as e:
                     print("An error occurred:", e.__class__.__name__)
 
+                while True:
+                    print('''Manually add semantic tags and attributes, multiple tags can be separated by commas, and the specific format is as follows:
+* Add semantic tags: add_tag xxx,xxx
+* Delete semantic tags: del_tag xxx,xxx
+* Add attributes: add_att xxx,xxx
+* Delete attributes: del_att xxx,xxx
+Press Enter to return.''')
+                
+                    op = input()
+
+                    act = op.split(' ')
+
+                    if len(act) > 1:
+                        act_type = act[0]
+                        tag_att = act[1].replace(' ', '').split(',')
+
+                        if act_type == 'add_tag':
+                            DM.add_semantic_tag(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'del_tag':
+                            DM.del_semantic_tag(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'add_att':
+                            DM.add_attribute(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        elif act_type == 'del_att':
+                            DM.del_attribute(name, tag_att)
+                            print('Added successfully.')
+                            break
+                        else:
+                            print('input error, try again')
+                    else:
+                        break
+                    
         elif op == '3':
             DM.update_doc()
         elif op == '4':

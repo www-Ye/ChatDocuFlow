@@ -22,8 +22,8 @@ class Doc_Management:
         self.query_pattern = re.compile(r'query=\[(.*?)\]')
         self.semantic_tag_pattern = re.compile(r'tag=\[(.*?)\]')
         self.no_semantic_tag_pattern = re.compile(r'no_tag=\[(.*?)\]')
-        self.property_pattern = re.compile(r'property=\[(.*?)\]')
-        self.no_property_pattern = re.compile(r'no_property=\[(.*?)\]')
+        self.attribute_pattern = re.compile(r'attribute=\[(.*?)\]')
+        self.no_attribute_pattern = re.compile(r'no_attribute=\[(.*?)\]')
 
         self.emb_size = 1536
         self.range_distance = 0.6
@@ -151,19 +151,21 @@ class Doc_Management:
             # D, I = index.search(query_emb, 10)
             # D, I = D[0], I[0]
             # print(lims, D, I)
-            paths = []
-            page_ids = []
+            # paths = []
+            # page_ids = []
+            res = []
             for i, idx in enumerate(I):
                 tmp = id2search[str(idx)]
-                paths.append(tmp['name'])
-                if search_type == 'page':
-                    page_ids.append(str(tmp['page_id']))
+                res.append(tmp)
+                # paths.append(tmp['name'])
+                # if search_type == 'page':
+                #     page_ids.append(str(tmp['page_id']))
                 print(i)
                 print(tmp)
                 print('distance:', D[i])
                 print('-'*50)
 
-        return paths, page_ids
+        return res
         # tags = self.semantic_tag_pattern.findall(op).split(',')
         # no_tags = self.no_semantic_tag_pattern.findall(op).split(',')
         # properties = self.property_pattern.findall(op).split(',')
@@ -175,13 +177,22 @@ class Doc_Management:
     def create_semantic_tag(self):
         pass
 
-    def add_property(self):
+    def add_attribute(self, name, attributes):
+        pass
+    
+    def del_attribute(self, name, attributes):
+        pass
+
+    def add_semantic_tag(self, name, tag):
+        pass
+
+    def del_semantic_tag(self, name, tag):
         pass
 
     def chose_document(self):
         pass
 
-    def doc_pages(self, name):
+    def get_doc_pages(self, name):
         page_nodes = self.db.get_nodes('page', name)
 
         page_id2summary = {}
