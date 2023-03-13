@@ -1,4 +1,4 @@
-# Document Management System based on OpenAI API/ChatGPT
+# Document/Paper Management System based on OpenAI API/ChatGPT
 
 This is a document management system that allows users to add all PDFs in a folder, and then index them using OpenAI's embedding technology. The system can also generate summaries for each page using ChatGPT. Users can search the documents by querying for keywords, or by searching for specific pages.
 
@@ -44,7 +44,7 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 ![alt text](fig/fig2.png)
 
-# 基于OpenAI API/ChatGPT的文档管理系统
+# 基于OpenAI API/ChatGPT的文档/论文管理系统
 
 这是一个文档管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。系统还可以使用ChatGPT为每个页面生成摘要。用户可以通过查询关键字或搜索特定页面来搜索文档。
 
