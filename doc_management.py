@@ -1,6 +1,7 @@
 from db_operater import Neo4j_DB, Sqlite_DB
 from openai_operater import Openai_Operater
 import numpy as np
+import win32api
 import faiss
 import json
 import os
@@ -26,11 +27,32 @@ class Doc_Management:
         self.no_attribute_pattern = re.compile(r'no_attribute=\[(.*?)\]')
 
         self.emb_size = 1536
-        self.range_distance = 0.6
+        self.range_distance = args.range_distance
 
         self.doc_list = self.get_doc()
 
         self.file_nums = self.update_doc()
+
+        self.search_help = '''The query should be entered in the following format:
+
+query=[] tag=[] no_tag=[] attribute=[] no_attribute=[]
+
+All parts items cannot be omitted at the same time. Multiple tags can be separated by ',' in [].
+
+* "query=[]" specifies a search query that you want to perform.
+* "tag=[]" specifies a list of semantic tags that the documents should have.
+* "no_tag=[]" specifies a list of semantic tags that the documents should not have.
+* "attribute=[]" specifies a list of document attributes and their values that the documents should have.
+* "no_attribute=[]" specifies a list of document attributes and their values that the documents should not have.
+
+Press Enter to go back to the previous level.'''
+
+        self.add_tag_att_help = '''Manually add semantic tags and attributes, multiple tags can be separated by commas, and the specific format is as follows:
+* "add_tag=[xxx,xxx]" Add semantic tags.
+* "del_tag=[xxx,xxx]" Delete semantic tags.
+* "add_att=[xxx,xxx]" Add attributes.
+* "del_att=[xxx,xxx]" Delete attributes.
+Press Enter to return.'''
     
     def update_doc(self):
         file_list = os.listdir(self.doc_dir)
@@ -126,8 +148,61 @@ class Doc_Management:
         # print(text_list[0])
         return text_list
     
-    def search(self):
-        pass
+    def search(self, op, search_type='doc'):
+        try:
+            res = self.semantic_search(op, search_type)
+        except Exception as e:
+            print("An error occurred:", e.__class__.__name__)
+
+        print('Open the document corresponding to the input ID.')
+        op = input()
+        
+        try:
+            select = res[int(op)]
+            print('open')
+            print(select)
+            name = select['name']
+            win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
+        except Exception as e:
+            print("An error occurred:", e.__class__.__name__)
+
+        if search_type == 'doc':
+            print('If you want to display a summary of each page of the document, enter 1. Otherwise, press Enter.')
+            op = input()
+            if op == '1':
+                self.get_doc_pages(name)
+
+        while True:
+            print(self.add_tag_att_help)
+        
+            op = input()
+
+            act = op.split('=')
+
+            if len(act) > 1:
+                act_type = act[0]
+                tag_att = act[1].split(',')
+
+                if act_type == 'add_tag':
+                    self.add_tag_att(select, tag_att, 'semantic_tag', search_type)
+                    print('Added successfully.')
+                    break
+                elif act_type == 'del_tag':
+                    self.del_tag_att(select, tag_att, 'semantic_tag', search_type)
+                    print('Deleted successfully.')
+                    break
+                elif act_type == 'add_att':
+                    self.add_tag_att(select, tag_att, 'attribute', search_type)
+                    print('Added successfully.')
+                    break
+                elif act_type == 'del_att':
+                    self.del_tag_att(select, tag_att, 'attribute', search_type)
+                    print('Deleted successfully.')
+                    break
+                else:
+                    print('input error, try again')
+            else:
+                break
 
     def doc_name_search(self, doc_name):
         pass
@@ -177,16 +252,18 @@ class Doc_Management:
     def create_semantic_tag(self):
         pass
 
-    def add_attribute(self, name, attributes):
-        pass
+    def add_tag_att(self, select, tag_att, type='semantic_tag', node_type='doc'):
+        if node_type == 'doc':
+            node = self.db.get_nodes(node_type, select['name']).first()
+        elif node_type == 'page':
+            node = self.db.get_nodes(node_type, select['name'], select['page_id']).first()
+        print(node)
+
+        for t in tag_att:
+            tmp = t.strip()
+            print(tmp)
     
-    def del_attribute(self, name, attributes):
-        pass
-
-    def add_semantic_tag(self, name, tag):
-        pass
-
-    def del_semantic_tag(self, name, tag):
+    def del_tag_att(self, name, tag_att, type='semantic_tag', node_type='doc'):
         pass
 
     def chose_document(self):
