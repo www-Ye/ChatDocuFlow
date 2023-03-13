@@ -44,6 +44,14 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 ![alt text](fig/fig2.png)
 
+![alt text](fig/fig3.png)
+
+![alt text](fig/fig4.png)
+
+![alt text](fig/fig5.png)
+
+![alt text](fig/fig6.png)
+
 # 基于OpenAI API/ChatGPT的文档/论文管理系统
 
 这是一个文档管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。系统还可以使用ChatGPT为每个页面生成摘要。用户可以通过查询关键字或搜索特定页面来搜索文档。

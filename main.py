@@ -12,7 +12,7 @@ def main():
     parser.add_argument("--password", default="neo4j", type=str)
     parser.add_argument("--db_name", default="", type=str)
     parser.add_argument("--language", default="Chinese", type=str)
-    parser.add_argument("--range_distance", default=0.6, type=float, help="The retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--range_distance", default=0.5, type=float, help="The retrieval threshold returns higher similarity for closer distances.")
 
     parser.add_argument("--openai_key", default="", type=str)
     parser.add_argument("--proxy", default="", type=str)
@@ -45,6 +45,7 @@ Press Enter key to exit.''')
 
         if op == '1':
             while True:
+                print('tags:', DM.tag_list)
                 print(DM.search_help)
                 op = input()
                 if op == "":
@@ -53,6 +54,7 @@ Press Enter key to exit.''')
 
         elif op == '2':
             while True:
+                print('tags:', DM.tag_list)
                 print(DM.search_help)
                 op = input()
                 if op == "":
@@ -63,7 +65,12 @@ Press Enter key to exit.''')
             DM.update_doc()
 
         elif op == '4':
-            DM.create_semantic_tag()
+            print('Choose to add semantic tags to documents (input "doc") or pages (input "page").')
+            add_type = input()
+            print('Create tags separated by commas (,), and they will be automatically added to nodes within the threshold distance.')
+            op = input()
+            tags = op.split(',')
+            DM.add_tags(None, tags, add_type)
 
 if __name__ == '__main__':
     main()

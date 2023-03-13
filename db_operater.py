@@ -13,25 +13,41 @@ class Neo4j_DB:
         self.node_matcher = NodeMatcher(self.graph)
         self.relationship_matcher = RelationshipMatcher(self.graph)
 
-    def get_search_node(self, search_type, tags, no_tags, properties, no_properties):
-        pass
+    def execute_cypher(self, cypher):
+        return self.graph.run(cypher)
 
     def create_relation(self, node1, node2, re_type):
-        relation = Relationship(node1, re_type, node2)
-        self.graph.create(relation)
+        relation = self.get_relation(node1, node2, re_type).first()
+        if relation is None:
+            relation = Relationship(node1, re_type, node2)
+            self.graph.create(relation)
 
-    def get_nodes(self, node_type, name=None):
+    def get_relation(self, node1, node2, re_type):
+        return self.relationship_matcher.match((node1, node2), r_type=re_type)
+    
+    def delete_relation(self, node1, node2, re_type):
+        relation = self.get_relation(node1, node2, re_type).first()
+
+        self.graph.separate(relation)
+
+    def get_nodes(self, node_type, name=None, page_id=None):
+
         if name is None:
             nodes = self.node_matcher.match(node_type)
         else:
-            nodes = self.node_matcher.match(node_type, name=name)
+            if page_id is None:
+                nodes = self.node_matcher.match(node_type, name=name)
+            else:
+                nodes = self.node_matcher.match(node_type, name=name, page_id=page_id)
 
         return nodes
     
-    def create_node(self, node_type, name, embedding=None, summary=None, page_id=None):
+    def create_node(self, node_type, name, embedding=None, summary=None, page_id=None, tags=None):
         # node = node_matcher.match(e_type).where(node_id=node_id).first()
-        node = Node(node_type, name=name, embedding=embedding, summary=summary, page_id=page_id)
-        self.graph.create(node)
+        node = self.get_nodes(node_type, name, page_id).first()
+        if node is None:
+            node = Node(node_type, name=name, embedding=embedding, summary=summary, page_id=page_id, tags=tags)
+            self.graph.create(node)
 
         return node
     
