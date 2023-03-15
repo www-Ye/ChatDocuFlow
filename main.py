@@ -12,7 +12,8 @@ def main():
     parser.add_argument("--password", default="neo4j", type=str)
     parser.add_argument("--db_name", default="", type=str)
     parser.add_argument("--language", default="Chinese", type=str)
-    parser.add_argument("--range_distance", default=0.5, type=float, help="The retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--doc_range_distance", default=0.5, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--page_range_distance", default=0.4, type=float, help="The page retrieval threshold returns higher similarity for closer distances.")
 
     parser.add_argument("--openai_key", default="", type=str)
     parser.add_argument("--proxy", default="", type=str)
@@ -24,18 +25,12 @@ def main():
     DM = Doc_Management(args)
 
     while True:
-        if DM.file_nums == 0:
+        if DM.doc_nums == 0:
             print('The paper is missing in the folder. Please add the paper.')
             time.sleep(3)
             break
-
-        print('''Please select your operation:
-
-1. Document-level search
-2. Page-level search
-3. Update document data
-4. Add semantic tags
-Press Enter key to exit.''')
+        
+        print(DM.action_help)
 
         op = input()
         if op == "":
@@ -46,31 +41,33 @@ Press Enter key to exit.''')
         if op == '1':
             while True:
                 print('tags:', DM.tag_list)
-                print(DM.search_help)
+                print(DM.doc_search_help)
                 op = input()
                 if op == "":
                     break
-                DM.search(op, 'doc')
+                DM.search_doc(op, 'doc')
 
         elif op == '2':
-            while True:
-                print('tags:', DM.tag_list)
-                print(DM.search_help)
-                op = input()
-                if op == "":
-                    break
-                DM.search(op, 'page')
+            print('To be added.')
+            pass
+            # while True:
+            #     print('tags:', DM.tag_list)
+            #     print(DM.page_search_help)
+            #     op = input()
+            #     if op == "":
+            #         break
+            #     DM.search(op, 'page')
 
         elif op == '3':
-            DM.update_doc()
-
-        elif op == '4':
-            print('Choose to add semantic tags to documents (input "doc") or pages (input "page").')
-            add_type = input()
+            # print('Choose to add semantic tags to documents (input "doc") or pages (input "page").')
+            # add_type = input()
             print('Create tags separated by commas (,), and they will be automatically added to nodes within the threshold distance.')
             op = input()
             tags = op.split(',')
-            DM.add_tags(None, tags, add_type)
+            DM.add_tags(None, tags)
+
+        elif op == '4':
+            DM.update_doc()
 
 if __name__ == '__main__':
     main()

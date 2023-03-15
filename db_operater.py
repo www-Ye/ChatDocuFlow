@@ -42,11 +42,11 @@ class Neo4j_DB:
 
         return nodes
     
-    def create_node(self, node_type, name, embedding=None, summary=None, page_id=None, tags=None):
+    def create_node(self, node_type, name, embedding=None, summary=None, page_id=None, tags=None, text=None):
         # node = node_matcher.match(e_type).where(node_id=node_id).first()
         node = self.get_nodes(node_type, name, page_id).first()
         if node is None:
-            node = Node(node_type, name=name, embedding=embedding, summary=summary, page_id=page_id, tags=tags)
+            node = Node(node_type, name=name, embedding=embedding, summary=summary, page_id=page_id, tags=tags, text=text)
             self.graph.create(node)
 
         return node
@@ -63,9 +63,6 @@ class Sqlite_DB:
         self.db_name = db_name
 
     def create_table(self):
-        pass
-
-    def get_doc(self):
         pass
 
     def open(self):

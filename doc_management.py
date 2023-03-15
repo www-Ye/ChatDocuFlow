@@ -21,35 +21,54 @@ class Doc_Management:
         self.openai_op = Openai_Operater(args.openai_key, args.proxy)
 
         self.query_pattern = re.compile(r'query=\[(.*?)\]')
-        self.tag_pattern = re.compile(r'tag=\[(.*?)\]')
+        self.tag_pattern = re.compile(r'has_tag=\[(.*?)\]')
         self.no_tag_pattern = re.compile(r'no_tag=\[(.*?)\]')
 
         self.emb_size = 1536
-        self.range_distance = args.range_distance
+        self.doc_range_distance = args.doc_range_distance
+        self.page_range_distance = args.page_range_distance
 
         self.doc_list = self.get_node_name('doc')
         self.tag_list = self.get_node_name('tag')
         # print(self.tag_list)
 
-        self.file_nums = self.update_doc()
+        self.update_doc()
 
-        self.search_help = '''The query should be entered in the following format:
+        # if (args.language == 'English') or args.language == 'english':
+        self.action_help = '''Choose your action:
 
-query=[] tag=[] no_tag=[]
+1. Document search - Retrieve relevant documents based on query and tags.
+2. Page-level conversation - Retrieve answers to questions based on relevant pages. (To be added.)
+3. Add/update semantic tags - Automatically associate similar documents with tags.
+4. Update documents - Update PDF files in the system's folder (automatically done each time the system is started).
+Press Enter to exit the system.'''
+
+        self.doc_search_help = '''The query should be entered in the following format:
+
+query=[] has_tag=[] no_tag=[]
 
 All parts items cannot be omitted at the same time. Multiple tags can be separated by ',' in [].
 
 * "query=[]" specifies a search query that you want to perform.
-* "tag=[]" specifies a list of tags that the documents should have.
+* "has_tag=[]" specifies a list of tags that the documents should have.
 * "no_tag=[]" specifies a list of tags that the documents should not have.
 
 Press Enter to go back to the previous level.'''
 
         self.add_tags_help = '''Manually add semantic tags, multiple tags can be separated by commas, and the specific format is as follows:
-* "add_tag=[xxx,yyy|similar,zzz]" means adding tags, where |similar indicates adding documents/pages that are semantically similar to the tag.
+* "add_tag=[xxx,yyy|similar,zzz]" means adding tags, where |similar indicates adding documents that are semantically similar to the tag.
 * "del_tag=[xxx,yyy]" means deleting tags.
 
 Press Enter to return.'''
+
+#         elif (args.language == 'Chinese') or args.language == 'chinese':
+#             self.action_help = '''选择你的操作：
+
+# 1. 文档搜索 - 根据query、tag选择检索相关文档
+# 2. 页面级问答 - 根据问题检索相关页面回答问题
+# 3. 添加/更新语义标签 - 自动将相似文档与标签进行关联
+# 4. 更新文档 - 将文件夹中的pdf更新至系统（每次启动系统会自动更新）
+# 输入回车键退出系统。'''
     
     def update_doc(self):
         file_list = os.listdir(self.doc_dir)
@@ -61,11 +80,13 @@ Press Enter to return.'''
         del_list = list(tmp_diff)
 
         # print(self.doc_list)
-        file_nums = len(file_list)
-        print('file nums:', file_nums)
-        print('add nums:', len(add_list))
-        print('del nums:', len(del_list))
+        # file_nums = len(file_list)
+        # print('file nums:', file_nums)
+        # print('add nums:', len(add_list))
+        # print('del nums:', len(del_list))
+        self.doc_nums = len(self.doc_list)
 
+        add_nums = 0
         for item in add_list:
             if(item.endswith('.pdf')):
                 print('Add {} to the DB'.format(item))
@@ -73,9 +94,20 @@ Press Enter to return.'''
 
                 self.add_doc(item, text_list)
 
+                add_nums += 1
+
+        del_nums = 0
         for item in del_list:
             print('Delete {} from the DB'.format(item))
             self.del_doc(item)
+
+            del_nums += 1
+
+        self.doc_nums = self.doc_nums + add_nums - del_nums
+
+        print('add nums:', add_nums)
+        print('del nums:', del_nums)
+        print('doc nums:', self.doc_nums)
 
         if (len(add_list) > 0) or (len(del_list) > 0):
             self.update_embs()
@@ -92,7 +124,7 @@ Press Enter to return.'''
                 self.page2id = json.load(f)
             self.page_index = faiss.read_index("cache/page_index.faiss")
 
-        return file_nums
+        # return file_nums
     
     def update_embs(self):
 
@@ -126,9 +158,9 @@ Press Enter to return.'''
         for i, page_node in enumerate(page_nodes):
             name = page_node['name']
             page_id = page_node['page_id']
-            summary = page_node['summary']
+            # summary = page_node['summary']
             tags = page_node['tags']
-            self.id2page[str(i)] = {'name': name, 'page_id': page_id, 'summary': summary, 'tags': tags}
+            self.id2page[str(i)] = {'name': name, 'page_id': page_id, 'tags': tags}
             self.page2id[name + ' ' + str(page_id)] = i
             page_embs.append(page_node['embedding'])
         with open('cache/id2page.json', 'w', encoding='utf-8') as f:
@@ -147,63 +179,127 @@ Press Enter to return.'''
 
         return text_list
     
-    def search(self, op, search_type='doc'):
+    def search_doc(self, op, search_type='doc'):
         res = self.semantic_search(op, search_type)
-        # try:
-        #     res = self.semantic_search(op, search_type)
-        # except Exception as e:
-        #     print("An error occurred:", e.__class__.__name__)
 
-        print('Open the document corresponding to the input ID.')
-        op = input()
-        flag = False
+        while (len(res) > 0):
 
-        try:
-            select = res[int(op)]
-            print('open')
-            print(select)
-            name = select['name']
-            win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
-            flag = True
-        except Exception as e:
-            print("An error occurred:", e.__class__.__name__)
+            print('Open the document corresponding to the input ID. Press enter to go back.')
+            op = input()
 
-        if flag:
-            if search_type == 'doc':
-                print('If you want to display a summary of each page of the document, enter 1. Otherwise, press Enter.')
-                op = input()
-                if op == '1':
-                    self.get_doc_pages(name)
-            elif search_type == 'page':
-                self.get_page_doc(name)
-                # print('If you want to display a summary of the document, enter 1. Otherwise, press Enter.')
-                # op = input()
-                # if op == '1':
-                #     self.get_page_doc(name)
+            if op == '':
+                break
+            
+            try:
+                select = res[int(op)]
+                print('Select:')
+                print(select)
+                print('-' * 50)
+                name = select['name']
+            except Exception as e:
+                print("An error occurred:", e.__class__.__name__)
+                continue
 
             while True:
-                print(self.add_tags_help)
-            
+                print('''Choose your action:
+
+1. Open the document and enter Q&A mode
+2. Only open the document
+3. Only enter Q&A mode
+4. Add/Del tags
+Press enter to go back.''')
+
                 op = input()
 
-                act = op.split('=')
-
-                if len(act) > 1:
-                    act_type = act[0]
-                    tags = act[1][1:-1].split(',')
-
-                    if act_type == 'add_tag':
-                        self.add_tags(select, tags, search_type)
-                        print('Added successfully.')
-                        break
-                    elif act_type == 'del_tag':
-                        self.del_tags(select, tags, search_type)
-                        print('Deleted successfully.')
-                        break
-                    else:
-                        print('input error, try again')
-                else:
+                if op == '':
                     break
+
+                if op == '1':
+                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
+                    page_embs, page_infos = self.get_doc_pages(name)
+                    self.doc_conversation(page_embs, page_infos)
+                elif op == '2':
+                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
+                elif op == '3':
+                    page_embs, page_infos = self.get_doc_pages(name)
+                    self.doc_conversation(page_embs, page_infos)
+                elif op == '4':
+                    print(self.add_tags_help)
+
+                    op = input()
+                    act = op.split('=')
+                    if len(act) > 1:
+                        act_type = act[0]
+                        tags = act[1][1:-1].split(',')
+
+                        if act_type == 'add_tag':
+                            self.add_tags(select, tags)
+                            print('Added successfully.')
+                        elif act_type == 'del_tag':
+                            self.del_tags(select, tags)
+                            print('Deleted successfully.')
+                        else:
+                            print('input error, try again')
+    
+    def doc_conversation(self, page_embs, page_infos):
+        print('Just start the conversation, press enter to exit.')
+
+        page_index = faiss.IndexFlatL2(self.emb_size)
+        # print(page_embs.shape)
+        # print(page_embs)
+        page_index.add(page_embs)
+        k = page_embs.shape[0]
+        
+        qa_messages = [{"role": "system", "content": "You are a professional researcher, please answer my questions based on the context."}]
+        check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
+        threshold = 0.6
+
+        while True:
+            op = input('Q:')
+
+            if op == '':
+                print('Exit conversation.')
+                break
+            
+
+            check_ans = self.openai_op.get_gpt_res(check_str + 'input:{}\noutput:'.format(op))
+            # print(check_ans)
+            # print(op)
+            if 'Yes' in check_ans:
+                query_emb = np.array(self.openai_op.get_embedding(op)).astype('float32').reshape(1, -1)
+                # print(query_emb)
+                D, I = page_index.search(query_emb, k)
+                D, I = D[0], I[0]
+                filtered_indices = I[D < threshold]
+                filtered_distances = D[D < threshold]
+
+                # print(filtered_indices, filtered_distances)
+                contexts = []
+                for i, idx in enumerate(filtered_indices):
+                    sim_page = page_infos[idx]
+                    # print(12345)
+                    print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
+                    # print('-'*50)
+                    prompt = 'Text:{}\nProvide a sentence from the text that is suitable to answer the question about {}.'.format(sim_page['text'], op)
+                    sents = self.openai_op.get_gpt_res(prompt)
+                    if ('Sorry' in sents) or ('sorry' in sents):
+                        print('no related sentences')
+                        continue
+                    print('related:', sents)
+                    contexts.append(sents)
+
+                context = 'Relevant sentences:' + '\n'.join(contexts) + '\n'
+                prompt = context + 'Answer the question "{}" in {} based on the relevant contexts in the paper.'.format(op, self.language)
+            else:
+                prompt = op
+            # print('prompt:', prompt)
+            qa_messages.append({"role": "user", "content": prompt})
+
+            answer = self.openai_op.conversation(qa_messages)
+
+            print('A:', answer)
+
+            qa_messages.append({"role": "assistant", "content": answer})
 
     def doc_name_search(self, doc_name):
         pass
@@ -214,20 +310,29 @@ Press Enter to return.'''
             index = self.doc_index
             id2search = self.id2doc
             name2id = self.doc2id
+            distance_threshold = self.doc_range_distance
         elif search_type == 'page':
             index = self.page_index
             id2search = self.id2page
             name2id = self.page2id
+            distance_threshold = self.page_range_distance
 
         query = self.query_pattern.findall(op)
-        I = None
+        filtered_indices = None
         if len(query) > 0:
             query = query[0]
             query_emb = np.array(self.openai_op.get_embedding(query)).astype('float32').reshape(1, -1)
 
-            lims, D, I = index.range_search(query_emb, self.range_distance)
-            # D, I = index.search(query_emb, 10)
-            # D, I = D[0], I[0]
+            # lims, D, I = index.range_search(query_emb, self.doc_range_distance)
+            # print(len(id2search))
+            k = len(id2search)
+            D, I = index.search(query_emb, k)
+            
+            D, I = D[0], I[0]
+            # print(D, I)
+
+            filtered_indices = I[D < distance_threshold]
+            filtered_distances = D[D < distance_threshold]
     
         tags = self.tag_pattern.findall(op)
         no_tags = self.no_tag_pattern.findall(op)
@@ -241,7 +346,8 @@ Press Enter to return.'''
             no_tags = no_tags[0].split(',')
             no_tags_str = []
             for no_tag in no_tags:
-                tmp_str = "NOT (n)-[:has_tag]->(:tag{name:'" + no_tag + "'})"
+                tmp_str = "NOT (n)-[:has_tag]->(:tag {name:'" + no_tag + "'})"
+                # NOT (d)-[:has_tag]->(:tag {name: 'chatgpt'})
                 # print(tmp_str)
                 no_tags_str.append(tmp_str)
             condition.append(' AND '.join(no_tags_str))
@@ -250,8 +356,13 @@ Press Enter to return.'''
         if len(condition) > 0:
             if search_type == 'doc':
                 cypher_str = 'MATCH (n:doc)-[:has_tag]->(t:tag) WHERE {} RETURN n.name'.format(' AND '.join(condition))
+                # print(cypher_str)
                 node_res = self.db.execute_cypher(cypher_str)
-                tag_res_ids = [name2id[n['n.name']] for n in node_res]
+                # print(node_res)
+                tag_res_ids = set()
+                for n in node_res:
+                    tag_res_ids.add(name2id[n['n.name']])
+                tag_res_ids = list(tag_res_ids)
 
             elif search_type == 'page':
                 cypher_str = 'MATCH (n:page)-[:has_tag]->(t:tag) WHERE {} RETURN n.name, n.page_id'.format(' AND '.join(condition))
@@ -259,22 +370,27 @@ Press Enter to return.'''
                 # print(node_res)
                 # for n in node_res:
                 #     print(n)
-                tag_res_ids = [name2id[n['n.name'] + ' ' + str(n['n.page_id'])] for n in node_res]
+                # tag_res_ids = [name2id[n['name'] + ' ' + str(n['page_id'])] for n in node_res]
+                tag_res_ids = set()
+                for n in node_res:
+                    tag_res_ids.add(name2id[n['name'] + ' ' + str(n['page_id'])])
+                tag_res_ids = list(tag_res_ids)
 
+        # print(tag_res_ids)
         res = []
-        if I is not None:
+        if filtered_indices is not None:
             cnt = 0
-            for i, idx in enumerate(I):
+            for i, idx in enumerate(filtered_indices):
                 if (tag_res_ids is not None) and (idx not in tag_res_ids):
                     continue
                 tmp = id2search[str(idx)]
                 res.append(tmp)
                 print(cnt)
                 print(tmp)
-                print('distance:', D[i])
+                print('distance:', filtered_distances[i])
                 print('-'*50)
                 cnt += 1
-        else:
+        elif tag_res_ids is not None:
             # print(tag_res_ids)
             for i, idx in enumerate(tag_res_ids):
                 tmp = id2search[str(idx)]
@@ -283,24 +399,25 @@ Press Enter to return.'''
                 print(tmp)
                 print('-'*50)
 
+        print('Number of search results:', len(res))
         return res
         
 
     def create_semantic_tag(self):
         pass
 
-    def add_tags(self, select, tags, node_type='doc'):
+    def add_tags(self, select, tags):
 
-        node_set = set()
+        doc_node_set = set()
+        page_node_set = set()
 
         if select is not None:
-            if node_type == 'doc':
-                node = self.db.get_nodes(node_type, select['name']).first()
-            elif node_type == 'page':
-                node = self.db.get_nodes(node_type, select['name'], select['page_id']).first()
-
+            doc_node = self.db.get_nodes('doc', select['name']).first()
+            page_nodes = self.db.get_nodes('page', select['name'])
         
-            node_set.add(node)
+            doc_node_set.add(doc_node)
+            for page_node in page_nodes:
+                page_node_set.add(page_node)
 
         for tag in tags:
             tag = tag.strip().split('|')
@@ -309,21 +426,26 @@ Press Enter to return.'''
             tag_node = self.db.create_node('tag', tag_name)
 
             if select is not None:
-                self.db.create_relation(node, tag_node, 'has_tag')
+                self.db.create_relation(doc_node, tag_node, 'has_tag')
+                for page_node in page_nodes:
+                    self.db.create_relation(page_node, tag_node, 'has_tag')
 
             if (select is None) or ((len(tag) > 1) and (tag[1] == 'similar')):
-                res = self.semantic_search("query=[{}]".format(tag_name), node_type)
+                res = self.semantic_search("query=[{}]".format(tag_name), 'doc')
 
                 for res_tmp in res:
-                    if node_type == 'doc':
-                        sim_node = self.db.get_nodes(node_type, res_tmp['name']).first()
-                    elif node_type == 'page':
-                        sim_node = self.db.get_nodes(node_type, res_tmp['name'], res_tmp['page_id']).first()
+                    sim_doc_node = self.db.get_nodes('doc', res_tmp['name']).first()
+                    sim_page_nodes = self.db.get_nodes('page', res_tmp['name'])
 
-                    node_set.add(sim_node)
-                    self.db.create_relation(sim_node, tag_node, 'has_tag')
+                    doc_node_set.add(sim_doc_node)
+                    self.db.create_relation(sim_doc_node, tag_node, 'has_tag')
 
-        for tmp_node in list(node_set):
+                    for sim_page_node in sim_page_nodes:
+                        page_node_set.add(sim_page_node)
+                        self.db.create_relation(sim_page_node, tag_node, 'has_tag')
+
+        # doc
+        for tmp_node in list(doc_node_set):
             tag_rels = self.db.relationship_matcher.match((tmp_node, None), "has_tag")
 
             tag_name_list = [rel.end_node["name"] for rel in tag_rels]
@@ -331,25 +453,32 @@ Press Enter to return.'''
             tmp_node['tags'] = tags_str
             self.db.graph.push(tmp_node)
 
-            if node_type == 'doc':
-                node_id = self.doc2id[tmp_node['name']]
-                self.id2doc[str(node_id)]['tags'] = tags_str
-            elif node_type == 'page':
-                node_id = self.page2id[tmp_node['name'] + ' ' + str(tmp_node['page_id'])]
-                self.id2page[str(node_id)]['tags'] = tags_str
+            node_id = self.doc2id[tmp_node['name']]
+            self.id2doc[str(node_id)]['tags'] = tags_str
 
-        if node_type == 'doc':
-            with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
-                json.dump(self.id2doc, f)
-        elif node_type == 'page':
-            with open('cache/id2page.json', 'w', encoding='utf-8') as f:
-                json.dump(self.id2page, f)
+        with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
+            json.dump(self.id2doc, f)
+
+        # page
+        for tmp_node in list(page_node_set):
+            tag_rels = self.db.relationship_matcher.match((tmp_node, None), "has_tag")
+
+            tag_name_list = [rel.end_node["name"] for rel in tag_rels]
+            tags_str = ','.join(tag_name_list)
+            tmp_node['tags'] = tags_str
+            self.db.graph.push(tmp_node)
+
+            node_id = self.page2id[tmp_node['name'] + ' ' + str(tmp_node['page_id'])]
+            self.id2page[str(node_id)]['tags'] = tags_str
+
+        with open('cache/id2page.json', 'w', encoding='utf-8') as f:
+            json.dump(self.id2page, f)
+
+        self.tag_list = self.get_node_name('tag')
     
-    def del_tags(self, select, tags, node_type='doc'):
-        if node_type == 'doc':
-            node = self.db.get_nodes(node_type, select['name']).first()
-        elif node_type == 'page':
-            node = self.db.get_nodes(node_type, select['name'], select['page_id']).first()
+    def del_tags(self, select, tags):
+        doc_node = self.db.get_nodes('doc', select['name']).first()
+        page_nodes = self.db.get_nodes('page', select['name'])
 
         for tag in tags:
             tag_name = tag.strip()
@@ -357,26 +486,35 @@ Press Enter to return.'''
 
             tag_node = self.db.get_nodes('tag', tag_name).first()
 
-            self.db.delete_relation(node, tag_node, 'has_tag')
+            self.db.delete_relation(doc_node, tag_node, 'has_tag')
+            for page_node in page_nodes:
+                self.db.delete_relation(page_node, tag_node, 'has_tag')
 
-        tag_rels = self.db.relationship_matcher.match((node, None), "has_tag")
+        tag_rels = self.db.relationship_matcher.match((doc_node, None), "has_tag")
 
         tag_name_list = [rel.end_node["name"] for rel in tag_rels]
         tags_str = ','.join(tag_name_list)
-        node['tags'] = tags_str
-        self.db.graph.push(node)
+        doc_node['tags'] = tags_str
+        self.db.graph.push(doc_node)
 
-        if node_type == 'doc':
-            node_id = self.doc2id[node['name']]
-            self.id2doc[str(node_id)]['tags'] = tags_str
-            with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
-                json.dump(self.id2doc, f)
+        node_id = self.doc2id[doc_node['name']]
+        self.id2doc[str(node_id)]['tags'] = tags_str
+        with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
+            json.dump(self.id2doc, f)
 
-        elif node_type == 'page':
-            node_id = self.page2id[node['name'] + ' ' + str(node['page_id'])]
+        for page_node in page_nodes:
+            tag_rels = self.db.relationship_matcher.match((page_node, None), "has_tag")
+
+            tag_name_list = [rel.end_node["name"] for rel in tag_rels]
+            tags_str = ','.join(tag_name_list)
+            page_node['tags'] = tags_str
+            self.db.graph.push(page_node)
+
+            node_id = self.page2id[page_node['name'] + ' ' + str(page_node['page_id'])]
             self.id2page[str(node_id)]['tags'] = tags_str
-            with open('cache/id2page.json', 'w', encoding='utf-8') as f:
-                json.dump(self.id2page, f)
+        
+        with open('cache/id2page.json', 'w', encoding='utf-8') as f:
+            json.dump(self.id2page, f)
 
     def chose_document(self):
         pass
@@ -392,14 +530,13 @@ Press Enter to return.'''
     def get_doc_pages(self, name):
         page_nodes = self.db.get_nodes('page', name)
 
-        page_id2summary = {}
+        page_embs = []
+        page_infos = []
         for page_node in page_nodes:
-            page_id2summary[page_node['page_id']] = page_node['summary']
+            page_embs.append(page_node['embedding'])
+            page_infos.append({'page_id': page_node['page_id'], 'text': page_node['text']})
         
-        sorted_page = sorted(page_id2summary.items())
-        for row in sorted_page:
-            print('page {}:'.format(row[0]), row[1])
-            print('================================')
+        return np.array(page_embs).astype('float32'), page_infos
     
     def get_node_name(self, node_type='doc'):
         nodes = self.db.get_nodes(node_type)
@@ -410,22 +547,25 @@ Press Enter to return.'''
         # page_node
         embs = []
         summaries = []
-        print(len(text_list))
+        print('page nums:', len(text_list))
         for i, text in enumerate(text_list):
             emb = self.openai_op.get_embedding(text)
-            summary = self.openai_op.summary_para(text, self.language)
             embs.append(emb)
-            summaries.append(summary)
-            print('page {}:'.format(i+1), summary)
-            print('================================')
+            
+            if i == 0:
+                summary = self.openai_op.summary_para(text, self.language)
+                summaries.append(summary)
+                # print('page {}:'.format(i+1), summary)
+                print('summary:', summary)
+                print('================================')
             # break
         
         doc_emb = embs[0]
         doc_summary = summaries[0]
         doc_node = self.db.create_node('doc', item, doc_emb, doc_summary, tags="")
 
-        for i in range(len(summaries)):
-            page_node = self.db.create_node('page', item, embs[i], summaries[i], page_id=i+1, tags="")
+        for i in range(len(text_list)):
+            page_node = self.db.create_node('page', item, embs[i], text=text_list[i], page_id=i+1, tags="")
             self.db.create_relation(doc_node, page_node, 'has_page')
 
     def del_doc(self, item):

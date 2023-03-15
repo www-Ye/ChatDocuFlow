@@ -1,8 +1,8 @@
 # Document/Paper Management System based on OpenAI API/ChatGPT
 
-This is a document management system that allows users to add all PDFs in a folder, and then index them using OpenAI's embedding technology. The system can also generate summaries for each page using ChatGPT. Users can search the documents by querying for keywords, or by searching for specific pages.
+This is a document/paper management system that allows users to add all PDF files in a folder and index them using OpenAI's embedding technology. Users can retrieve documents by querying keywords or tags. After selecting a document/paper, conversational question-answering can be conducted to learn about the paper.
 
-The project may plan to implement document/page-based question answering and conversational retrieval in the future.
+The project plans to implement question-answering for all pages in the future.
 
 ### Configuration
 
@@ -32,7 +32,7 @@ Replace xxx with your OpenAI API key, and Chinese with the desired language for 
 
 ### Usage
 
-To use the system, simply add your PDF files to the designated folder, and wait for them to be indexed. Then, use the search functionality to find the documents or pages you need. You can also add tags to the documents and pages to help with organization and retrieval.
+To use the system, simply add your PDF files to the designated folder, and wait for them to be indexed. Then, use the search functionality to find the documents you need. You can also add tags to the documents to help with organization and retrieval.
 
 ### Contributing
 
@@ -54,9 +54,9 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 # 基于OpenAI API/ChatGPT的文档/论文管理系统
 
-这是一个文档管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。系统还可以使用ChatGPT为每个页面生成摘要。用户可以通过查询关键字或搜索特定页面来搜索文档。
+这是一个文档/论文管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。用户可以通过查询关键字或标签来检索文档。在选中文档/论文后可以进行对话式问答以了解有关论文的问题。
 
-项目未来可能打算实现针对文档/页面的问答，以及对话式检索。
+项目未来打算实现针对所有页面的问答。
 
 ### 配置
 
@@ -86,7 +86,7 @@ pip install -r requirements.txt
 
 ### 使用
 
-要使用系统，只需将您的PDF文件添加到指定的文件夹中，并等待它们被索引。然后，使用搜索功能查找您需要的文档或页面。您还可以向文档和页面添加标签以帮助组织和检索。
+要使用系统，只需将您的PDF文件添加到指定的文件夹中，并等待它们被索引。然后，使用搜索功能查找您需要的文档。您还可以向文档添加标签以帮助组织和检索。
 
 ### 贡献
 
