@@ -61,10 +61,33 @@ def main():
         elif op == '3':
             # print('Choose to add semantic tags to documents (input "doc") or pages (input "page").')
             # add_type = input()
-            print('Create tags separated by commas (,), and they will be automatically added to nodes within the threshold distance.')
+            # add or del tag
+            print('''Add/Delete semantic tags, automatically connecting with similar papers when adding. The specific format is as follows:
+*"add_tag=[xxx,zzz]" represents adding tags.
+*"del_tag=[xxx,yyy]" represents deleting tags.
+
+Press Enter to return.''')
             op = input()
-            tags = op.split(',')
-            DM.add_tags(None, tags)
+            if op == '':
+                continue
+            
+            act = op.split('=')
+            if len(act) > 1:
+                act_type = act[0]
+                try:
+                    tags = act[1][1:-1].split(',')
+                except Exception as e:
+                    print("An error occurred:", e.__class__.__name__)
+                    continue
+                
+                if act_type == 'add_tag':
+                    DM.add_tags(None, tags)
+                    print('Added successfully.')
+                elif act_type == 'del_tag':
+                    DM.del_tags(None, tags)
+                    print('Deleted successfully.')
+                else:
+                    print('input error, try again')
 
         elif op == '4':
             DM.update_doc()

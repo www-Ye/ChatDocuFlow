@@ -203,9 +203,9 @@ Press Enter to return.'''
             while True:
                 print('''Choose your action:
 
-1. Open the document and enter Q&A mode
+1. Open the document and enter conversation mode
 2. Only open the document
-3. Only enter Q&A mode
+3. Only enter conversation mode
 4. Add/Del tags
 Press enter to go back.''')
 
@@ -230,7 +230,11 @@ Press enter to go back.''')
                     act = op.split('=')
                     if len(act) > 1:
                         act_type = act[0]
-                        tags = act[1][1:-1].split(',')
+                        try:
+                            tags = act[1][1:-1].split(',')
+                        except Exception as e:
+                            print("An error occurred:", e.__class__.__name__)
+                            continue
 
                         if act_type == 'add_tag':
                             self.add_tags(select, tags)
@@ -254,6 +258,10 @@ Press enter to go back.''')
         check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
         threshold = 0.6
 
+        # page_infos = sorted(page_infos, key=lambda item: item['page_id'])
+        # print(sorted_by_value)
+
+
         while True:
             op = input('Q:')
 
@@ -276,18 +284,20 @@ Press enter to go back.''')
                 # print(filtered_indices, filtered_distances)
                 contexts = []
                 for i, idx in enumerate(filtered_indices):
+                # for i, idx in enumerate(range(len(page_infos))):
                     sim_page = page_infos[idx]
-                    # print(12345)
                     print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
                     # print('-'*50)
-                    prompt = 'Text:{}\nProvide a sentence from the text that is suitable to answer the question about {}.'.format(sim_page['text'], op)
+                    # Answer the question "{}" based on the relevant contexts.
+                    prompt = 'Text:{}\n{}'.format(sim_page['text'], op)
                     sents = self.openai_op.get_gpt_res(prompt)
                     if ('Sorry' in sents) or ('sorry' in sents):
                         print('no related sentences')
                         continue
-                    print('related:', sents)
-                    contexts.append(sents)
+                    print(sents)
+                    contexts.append('page {}: '.format(sim_page['page_id']) + sents)
 
+                print()
                 context = 'Relevant sentences:' + '\n'.join(contexts) + '\n'
                 prompt = context + 'Answer the question "{}" in {} based on the relevant contexts in the paper.'.format(op, self.language)
             else:
@@ -298,7 +308,7 @@ Press enter to go back.''')
             answer = self.openai_op.conversation(qa_messages)
 
             print('A:', answer)
-
+            print('-' * 50)
             qa_messages.append({"role": "assistant", "content": answer})
 
     def doc_name_search(self, doc_name):
@@ -477,6 +487,14 @@ Press enter to go back.''')
         self.tag_list = self.get_node_name('tag')
     
     def del_tags(self, select, tags):
+        if select is None:
+            for tag in tags:
+                tag_name = tag.strip()
+                print('del', tag_name)
+                # tag_node = self.db.get_nodes('tag', tag_name).first()
+                self.db.delete_node('tag', tag_name)
+            return
+
         doc_node = self.db.get_nodes('doc', select['name']).first()
         page_nodes = self.db.get_nodes('page', select['name'])
 
