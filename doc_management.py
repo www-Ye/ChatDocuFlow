@@ -287,7 +287,7 @@ Press enter to go back.''')
                     # print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
 
                     # Answer the question "{}" based on the relevant contexts.
-                    prompt = 'Text:{}\nBased on the provided text, answer the question: \'{}\' in {}. If unable to answer, simply return \'No\'.'.format(page['text'], op, self.language)
+                    prompt = 'Text:{}\nBased on the provided text, answer the question: \'{}\' in {}. If unable to answer, return \'No\'.'.format(page['text'], op, self.language)
                     sents = self.openai_op.get_gpt_res(prompt)
                     tmp = sents[:5]
                     if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
