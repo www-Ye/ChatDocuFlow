@@ -216,13 +216,13 @@ Press enter to go back.''')
 
                 if op == '1':
                     win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
-                    page_embs, page_infos = self.get_doc_pages(name)
-                    self.doc_conversation(page_embs, page_infos)
+                    page_infos = self.get_doc_pages(name)
+                    self.doc_conversation(page_infos)
                 elif op == '2':
                     win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
                 elif op == '3':
-                    page_embs, page_infos = self.get_doc_pages(name)
-                    self.doc_conversation(page_embs, page_infos)
+                    page_infos = self.get_doc_pages(name)
+                    self.doc_conversation(page_infos)
                 elif op == '4':
                     print(self.add_tags_help)
 
@@ -245,16 +245,16 @@ Press enter to go back.''')
                         else:
                             print('input error, try again')
     
-    def doc_conversation(self, page_embs, page_infos):
+    def doc_conversation(self, page_infos):
         print('Just start the conversation, press enter to exit.')
 
         page_index = faiss.IndexFlatL2(self.emb_size)
         # print(page_embs.shape)
         # print(page_embs)
-        page_index.add(page_embs)
-        k = page_embs.shape[0]
+        # page_index.add(page_embs)
+        # k = page_embs.shape[0]
         
-        qa_messages = [{"role": "system", "content": "You are a professional researcher, please answer my questions based on the context."}]
+        qa_sys = {"role": "system", "content": "You are a professional researcher, please answer my questions based on the context."}
         check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
         threshold = 0.6
 
@@ -274,28 +274,30 @@ Press enter to go back.''')
             # print(check_ans)
             # print(op)
             if 'Yes' in check_ans:
-                query_emb = np.array(self.openai_op.get_embedding(op)).astype('float32').reshape(1, -1)
-                # print(query_emb)
-                D, I = page_index.search(query_emb, k)
-                D, I = D[0], I[0]
-                filtered_indices = I[D < threshold]
-                filtered_distances = D[D < threshold]
+                # query_emb = np.array(self.openai_op.get_embedding(op)).astype('float32').reshape(1, -1)
+                # D, I = page_index.search(query_emb, k)
+                # D, I = D[0], I[0]
+                # filtered_indices = I[D < threshold]
+                # filtered_distances = D[D < threshold]
 
-                # print(filtered_indices, filtered_distances)
                 contexts = []
-                for i, idx in enumerate(filtered_indices):
-                # for i, idx in enumerate(range(len(page_infos))):
-                    sim_page = page_infos[idx]
-                    print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
-                    # print('-'*50)
+                # for i, idx in enumerate(filtered_indices):
+                for idx in range(len(page_infos)):
+                    page = page_infos[idx]
+                    # print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
+
                     # Answer the question "{}" based on the relevant contexts.
-                    prompt = 'Text:{}\n{}'.format(sim_page['text'], op)
+                    prompt = 'Text:{}\nBased on the provided text, answer the question: \'{}\' in {}. If unable to answer, simply return \'No\'.'.format(page['text'], op, self.language)
                     sents = self.openai_op.get_gpt_res(prompt)
-                    if ('Sorry' in sents) or ('sorry' in sents):
-                        print('no related sentences')
+                    tmp = sents[:5]
+                    if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
+                        # print('no related sentences')
+                        # print('-'*50)
                         continue
+                    print('page_id:', idx+1)
                     print(sents)
-                    contexts.append('page {}: '.format(sim_page['page_id']) + sents)
+                    print('-'*50)
+                    contexts.append('page {}: '.format(page['page_id']) + sents)
 
                 print()
                 context = 'Relevant sentences:' + '\n'.join(contexts) + '\n'
@@ -303,13 +305,13 @@ Press enter to go back.''')
             else:
                 prompt = op
             # print('prompt:', prompt)
-            qa_messages.append({"role": "user", "content": prompt})
+            qa_messages = [qa_sys, {"role": "user", "content": prompt}]
 
             answer = self.openai_op.conversation(qa_messages)
 
             print('A:', answer)
             print('-' * 50)
-            qa_messages.append({"role": "assistant", "content": answer})
+            # qa_messages.append({"role": "assistant", "content": answer})
 
     def doc_name_search(self, doc_name):
         pass
@@ -548,13 +550,15 @@ Press enter to go back.''')
     def get_doc_pages(self, name):
         page_nodes = self.db.get_nodes('page', name)
 
-        page_embs = []
+        # page_embs = []
         page_infos = []
         for page_node in page_nodes:
-            page_embs.append(page_node['embedding'])
+            # page_embs.append(page_node['embedding'])
             page_infos.append({'page_id': page_node['page_id'], 'text': page_node['text']})
         
-        return np.array(page_embs).astype('float32'), page_infos
+        sorted_page_infos = sorted(page_infos, key=lambda x: x['page_id'])
+        # return np.array(page_embs).astype('float32'), page_infos
+        return sorted_page_infos
     
     def get_node_name(self, node_type='doc'):
         nodes = self.db.get_nodes(node_type)
@@ -578,7 +582,10 @@ Press enter to go back.''')
                 print('================================')
             # break
         
-        doc_emb = embs[0]
+        # doc_emb = embs[0]
+        # print(doc_emb, type(doc_emb))
+        doc_emb = list(np.mean(np.array(embs), axis=0))
+        # print(doc_emb, type(doc_emb))
         doc_summary = summaries[0]
         doc_node = self.db.create_node('doc', item, doc_emb, doc_summary, tags="")
 
