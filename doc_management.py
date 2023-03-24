@@ -300,8 +300,8 @@ Press enter to go back.''')
                     contexts.append('page {}: '.format(page['page_id']) + sents)
 
                 print()
-                context = 'Relevant sentences:' + '\n'.join(contexts) + '\n'
-                prompt = context + 'Answer the question "{}" in {} based on the relevant contexts in the paper.'.format(op, self.language)
+                context = 'Relevant contexts:' + '\n'.join(contexts) + '\n'
+                prompt = context + 'Answer the question "{}" in {} based on the relevant contexts.'.format(op, self.language)
             else:
                 prompt = op
             # print('prompt:', prompt)
