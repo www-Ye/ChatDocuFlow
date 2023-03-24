@@ -287,7 +287,7 @@ Press enter to go back.''')
                     # print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
 
                     # Answer the question "{}" based on the relevant contexts.
-                    prompt = 'Text:{}\nBased on the provided text, answer the question in {}. If unable to answer, return \'No\'.\nQuestion:{}'.format(page['text'], self.language, op)
+                    prompt = 'Doc page {}\nText:{}\nBased on the provided text, answer the question in {}. If unable to answer, return \'No\'.\nQuestion:{}'.format(idx+1, page['text'], self.language, op)
                     sents = self.openai_op.get_gpt_res(prompt)
                     tmp = sents[:5]
                     if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
@@ -301,7 +301,7 @@ Press enter to go back.''')
 
                 print()
                 context = 'Relevant contexts:' + '\n'.join(contexts) + '\n'
-                prompt = context + 'Answer the question "{}" in {} based on the relevant contexts.'.format(op, self.language)
+                prompt = context + 'Summarize the contexts in {}.'.format(self.language)
             else:
                 prompt = op
             # print('prompt:', prompt)
