@@ -1,76 +1,55 @@
-import pandas as pd
 import sqlite3
-from py2neo import Graph, Node, Relationship
-from py2neo import NodeMatcher, RelationshipMatcher
-import numpy as np
-
-class Neo4j_DB:
-    def __init__(self, user, password):
-        ## Connect to the Neo4j database by entering the user password.
-        self.graph = Graph('http://localhost:7474', auth=(user, password))
-        # self.graph.delete_all()
-
-        self.node_matcher = NodeMatcher(self.graph)
-        self.relationship_matcher = RelationshipMatcher(self.graph)
-
-    def execute_cypher(self, cypher):
-        return self.graph.run(cypher)
-
-    def create_relation(self, node1, node2, re_type):
-        relation = self.get_relation(node1, node2, re_type).first()
-        if relation is None:
-            relation = Relationship(node1, re_type, node2)
-            self.graph.create(relation)
-
-    def get_relation(self, node1, node2, re_type):
-        return self.relationship_matcher.match((node1, node2), r_type=re_type)
-    
-    def delete_relation(self, node1, node2, re_type):
-        relation = self.get_relation(node1, node2, re_type).first()
-
-        self.graph.separate(relation)
-
-    def get_nodes(self, node_type, name=None, page_id=None):
-
-        if name is None:
-            nodes = self.node_matcher.match(node_type)
-        else:
-            if page_id is None:
-                nodes = self.node_matcher.match(node_type, name=name)
-            else:
-                nodes = self.node_matcher.match(node_type, name=name, page_id=page_id)
-
-        return nodes
-    
-    def create_node(self, node_type, name, embedding=None, summary=None, page_id=None, tags=None, text=None):
-        # node = node_matcher.match(e_type).where(node_id=node_id).first()
-        node = self.get_nodes(node_type, name, page_id).first()
-        if node is None:
-            node = Node(node_type, name=name, embedding=embedding, summary=summary, page_id=page_id, tags=tags, text=text)
-            self.graph.create(node)
-
-        return node
-    
-    def delete_node(self, node_type, name):
-        nodes = self.get_nodes(node_type, name)
-
-        for node in nodes:
-            self.graph.delete(node)
-
 
 class Sqlite_DB:
     def __init__(self, db_name):
         self.db_name = db_name
 
-    def create_table(self):
-        pass
+        self.open()
+        self.create_table('docs_table', {"source": "TEXT", "summary": "TEXT", "page_nums": "TEXT", "chunk_nums": "TEXT", "embedding": "BLOB"})
+        # self.create_table('pages_table', {"source": "TEXT", "page_id": "TEXT", "page_text": "TEXT", "summary": "TEXT", "embedding": "BLOB"})
+        self.create_table('chunks_table', {"source": "TEXT", "page_span": "TEXT", "chunk_id": "TEXT", "chunk_text": "TEXT", "summary": "TEXT", "embedding": "BLOB"})
+        self.create_table('semantic_tags_table', {"tag": "TEXT", "embedding": "BLOB"})
+        self.create_table('regular_tags_table', {"tag": "TEXT", "embedding": "BLOB"})
+        self.create_table('semantic_tags2source_table', {"tag": "TEXT", "source": "TEXT"})
+        self.create_table('regular_tags2source_table', {"tag": "TEXT", "source": "TEXT"})
+        self.close()
+
+    def create_table(self, table_name, columns):
+        columns_str = ', '.join([f"{col_name} {col_type}" for col_name, col_type in columns.items()])
+        self.cursor.execute(f"CREATE TABLE IF NOT EXISTS {table_name} ({columns_str});")
+        self.conn.commit()
+
+    def insert(self, table_name, data):
+        columns_str = ', '.join(data.keys())
+        values_placeholder = ', '.join(['?' for _ in data.values()])
+        values = tuple(data.values())
+        self.cursor.execute(f"INSERT INTO {table_name} ({columns_str}) VALUES ({values_placeholder});", values)
+        self.conn.commit()
+
+    def search(self, table_name, conditions=None, selected_columns=None):
+        selected_columns_str = ', '.join(selected_columns) if selected_columns else '*'
+        
+        if conditions:
+            conditions_str = ' AND '.join([f"{col_name} = ?" for col_name in conditions.keys()])
+            values = tuple(conditions.values())
+            self.cursor.execute(f"SELECT {selected_columns_str} FROM {table_name} WHERE {conditions_str};", values)
+        else:
+            self.cursor.execute(f"SELECT {selected_columns_str} FROM {table_name};")
+            
+        result = self.cursor.fetchall()
+
+        return result
+
+    def delete(self, table_name, conditions):
+        conditions_str = ' AND '.join([f"{col_name} = ?" for col_name in conditions.keys()])
+        values = tuple(conditions.values())
+        self.cursor.execute(f"DELETE FROM {table_name} WHERE {conditions_str};", values)
+        self.conn.commit()
 
     def open(self):
-        # Open database connection.
         self.conn = sqlite3.connect(self.db_name)
         self.cursor = self.conn.cursor()
 
     def close(self):
-        # Close database connection.
         self.cursor.close()
         self.conn.close()

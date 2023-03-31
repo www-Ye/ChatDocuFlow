@@ -1,16 +1,30 @@
 # Document/Paper Management System based on OpenAI API/ChatGPT
 
-This is a document/paper management system that allows users to add all PDF files in a folder and index them using OpenAI's embedding technology. Users can retrieve documents by querying keywords or tags. After selecting a document/paper, conversational question-answering can be conducted to learn about the paper.
+This is a document/paper management system that allows users to add all PDFs in a folder and index them using OpenAI's embedding technology. Users can retrieve documents through natural language search or tags. After selecting a document/paper, they can engage in question-answering to learn more about the paper.
 
-The project plans to implement question-answering for all pages in the future.
+Current features include:
+
+* Automatic storage of papers in the database from a folder (papers are automatically divided into chunks, summarized and embedded, and then a summary and embedding for the entire paper is obtained)
+
+* Natural language similarity search for papers (query=[xxx])
+
+* question-answering after entering the paper (questions are answered chunk by chunk and then summarized)
+
+Features to be added:
+
+* Semantic tags (newly added papers are automatically added to semantically similar tags)
+
+* Regular tags (manually added and will not automatically include semantically similar papers)
+
+* Chunk-level question-answering (directly using natural language dialogue to locate the corresponding chunk in the article and engage in question-answering)
 
 ### Configuration
 
-To set up the system, first download the Neo4j database. Then create a new Conda environment using the following commands:
+To set up the system, first create a new Conda environment using the following command:
 
 ```
-conda create --name doc_manager
-conda activate doc_manager
+conda create --name chatdocuflow python=3.8
+conda activate chatdocuflow
 ```
 
 Next, install the required dependencies:
@@ -20,15 +34,11 @@ conda install -c pytorch faiss-cpu
 pip install -r requirements.txt
 ```
 
-Finally, start the Neo4j server by running the following command:
+Start the system by running:
 
-```neo4j.bat console```
+```python main.py --openai_key xxx --language English```
 
-Then, start the system by running:
-
-```python main.py --user neo4j --password neo4j --openai_key xxx --language Chinese```
-
-Replace xxx with your OpenAI API key, and Chinese with the desired language for summarization.
+Replace xxx with your OpenAI API key and replace the parameter after "language" with the desired language.
 
 ### Usage
 
@@ -54,17 +64,31 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 # 基于OpenAI API/ChatGPT的文档/论文管理系统
 
-这是一个文档/论文管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。用户可以通过查询关键字或标签来检索文档。在选中文档/论文后可以进行对话式问答以了解有关论文的问题。
+这是一个文档/论文管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。用户可以通过自然语言搜索或者标签来检索文档。在选中文档/论文后可以进行对话式问答以了解有关论文的问题。
 
-项目未来打算实现针对所有页面的问答。
+目前包含功能：
+
+* 自动将文件夹中论文存入数据库（自动将论文分成块，并对每一块总结并嵌入，最后获得一个整篇文章的总结和嵌入）
+
+* 自然语言相似度搜索论文（query=[xxx]）
+
+* 进入论文后可以进行对话式问答，（通过每一块回答问题最后合并总结）
+
+将要加入：
+
+* 语义标签（自动将新增论文添加入语义相似的标签）
+
+* 普通标签（手动添加，不会自动加入语义相似的论文）
+
+* 文本块级问答（直接通过自然语言对话定位到对应文章的块，并进行问答）
 
 ### 配置
 
-要设置系统，请首先下载Neo4j数据库。然后使用以下命令创建一个新的Conda环境：
+要设置系统，首先使用以下命令创建一个新的Conda环境：
 
 ```
-conda create --name doc_manager
-conda activate doc_manager
+conda create --name chatdocuflow python=3.8
+conda activate doc_chatdocuflow
 ```
 
 接下来，安装所需的依赖项：
@@ -74,15 +98,11 @@ conda install -c pytorch faiss-cpu
 pip install -r requirements.txt
 ```
 
-最后，通过运行以下命令启动Neo4j服务器：
+通过运行以下命令启动系统：
 
-```neo4j.bat console```
+```python main.py --openai_key xxx --language Chinese```
 
-然后，通过运行以下命令启动系统：
-
-```python main.py --user neo4j --password neo4j --openai_key xxx --language Chinese```
-
-将 xxx 替换为您的OpenAI API密钥，Chinese 替换为所需的摘要语言。
+将 xxx 替换为您的OpenAI API密钥，language 后参数替换为所需的语言。
 
 ### 使用
 

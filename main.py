@@ -6,14 +6,11 @@ import os
 def main():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--doc_dir", default="documents", type=str)
-    parser.add_argument("--db_type", default="neo4j", type=str)
-    parser.add_argument("--user", default="neo4j", type=str)
-    parser.add_argument("--password", default="neo4j", type=str)
-    parser.add_argument("--db_name", default="", type=str)
-    parser.add_argument("--language", default="Chinese", type=str)
-    parser.add_argument("--doc_range_distance", default=0.5, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
-    parser.add_argument("--page_range_distance", default=0.4, type=float, help="The page retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--doc_dir", default="docs", type=str)
+    parser.add_argument("--db_name", default="docuflow.db", type=str)
+    parser.add_argument("--language", default="English", type=str)
+    parser.add_argument("--doc_range_distance", default=0.4, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--chunk_range_distance", default=0.3, type=float, help="The chunk retrieval threshold returns higher similarity for closer distances.")
 
     parser.add_argument("--openai_key", default="", type=str)
     parser.add_argument("--proxy", default="", type=str)
@@ -40,7 +37,8 @@ def main():
 
         if op == '1':
             while True:
-                print('tags:', DM.tag_list)
+                print('semantic tags:', DM.semantic_tags_list)
+                print('regular tags:', DM.regular_tags_list)
                 print(DM.doc_search_help)
                 op = input()
                 if op == "":

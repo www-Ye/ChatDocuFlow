@@ -1,99 +1,161 @@
-from db_operater import Neo4j_DB, Sqlite_DB
-from openai_operater import Openai_Operater
+from db_operater import Sqlite_DB
+from llm_operater import LLM_Operater
 import numpy as np
 import win32api
+import pickle
 import faiss
 import json
 import os
 import fitz
 import re
+import tiktoken
 
-class Doc_Management:
-    def __init__(self, args):
-        self.doc_dir = args.doc_dir
-        self.language = args.language
-        
-        if args.db_type == 'neo4j':
-            self.db = Neo4j_DB(args.user, args.password)
-        elif args.db_type == 'sqlite':
-            self.db = Sqlite_DB(args.db_name)
-
-        self.openai_op = Openai_Operater(args.openai_key, args.proxy)
-
-        self.query_pattern = re.compile(r'query=\[(.*?)\]')
-        self.tag_pattern = re.compile(r'has_tag=\[(.*?)\]')
-        self.no_tag_pattern = re.compile(r'no_tag=\[(.*?)\]')
-
-        self.emb_size = 1536
-        self.doc_range_distance = args.doc_range_distance
-        self.page_range_distance = args.page_range_distance
-
-        self.doc_list = self.get_node_name('doc')
-        self.tag_list = self.get_node_name('tag')
-        # print(self.tag_list)
-
-        self.update_doc()
-
-        # if (args.language == 'English') or args.language == 'english':
-        self.action_help = '''Choose your action:
+Action_Help_EN = '''Choose your action:
 
 1. Document search - Retrieve relevant documents based on query and tags.
-2. Page-level conversation - Retrieve answers to questions based on relevant pages. (To be added.)
-3. Add/update semantic tags - Automatically associate similar documents with tags.
+2. Chunk-level conversation - Retrieve answers to questions based on relevant pages. (To be added.)
+3. Add/update semantic tags - Automatically associate similar documents with tags. (To be added.)
 4. Update documents - Update PDF files in the system's folder (automatically done each time the system is started).
 Press Enter to exit the system.'''
 
-        self.doc_search_help = '''The query should be entered in the following format:
+Action_Help_ZH = '''选择你的操作：
 
-query=[] has_tag=[] no_tag=[]
+1. 文档搜索 - 根据query、tag选择检索相关文档
+2. 块级问答 - 根据问题检索相关页面回答问题 (To be added.)
+3. 添加/更新语义标签 - 自动将相似文档与标签进行关联 (To be added.)
+4. 更新文档 - 将文件夹中的pdf更新至系统（每次启动系统会自动更新）
+输入回车键退出系统。'''
 
-All parts items cannot be omitted at the same time. Multiple tags can be separated by ',' in [].
+Doc_Help_EN = '''The query should be entered in the following format:
 
-* "query=[]" specifies a search query that you want to perform.
-* "has_tag=[]" specifies a list of tags that the documents should have.
-* "no_tag=[]" specifies a list of tags that the documents should not have.
+query=[] has_s_tag=[] no_s_tag=[] has_r_tag=[] no_r_tag=[]
 
+All sections cannot be omitted at the same time. Multiple tags can be separated by commas within [].
+
+* "query=[]" specifies the search query you want to perform.
+* "has_s_tag=[]" specifies the list of semantic tags that the document should have. (To be added.)
+* "no_s_tag=[]" specifies the list of semantic tags that the document should not have. (To be added.)
+* "has_r_tag=[]" specifies the list of regular tags that the document should have. (To be added.)
+* "no_r_tag=[]" specifies the list of regular tags that the document should not have. (To be added.)
 Press Enter to go back to the previous level.'''
 
-        self.add_tags_help = '''Manually add semantic tags, multiple tags can be separated by commas, and the specific format is as follows:
+Doc_Help_ZH = '''查询应以以下格式输入：
+
+query=[] has_s_tag=[] no_s_tag=[] has_r_tag=[] no_r_tag=[]
+
+所有部分项不能同时省略。多个标签可以用逗号在[]中分隔。
+
+* "query=[]" 指定您想执行的搜索查询。
+* "has_s_tag=[]" 指定文档应具有的语义标签列表。 (To be added.)
+* "no_s_tag=[]" 指定文档不应具有的语义标签列表。 (To be added.)
+* "has_r_tag=[]" 指定文档应具有的普通标签列表。 (To be added.)
+* "no_r_tag=[]" 指定文档不应具有的普通标签列表。 (To be added.)
+按 Enter 返回上一级。'''
+
+Add_Tags_Help_EN = '''Manually add semantic tags, multiple tags can be separated by commas, and the specific format is as follows:
 * "add_tag=[xxx,yyy|similar,zzz]" means adding tags, where |similar indicates adding documents that are semantically similar to the tag.
 * "del_tag=[xxx,yyy]" means deleting tags.
 
 Press Enter to return.'''
 
-#         elif (args.language == 'Chinese') or args.language == 'chinese':
-#             self.action_help = '''选择你的操作：
+Add_Tags_Help_ZH = '''手动添加语义标签，多个标签可以用逗号分隔，具体格式如下：
 
-# 1. 文档搜索 - 根据query、tag选择检索相关文档
-# 2. 页面级问答 - 根据问题检索相关页面回答问题
-# 3. 添加/更新语义标签 - 自动将相似文档与标签进行关联
-# 4. 更新文档 - 将文件夹中的pdf更新至系统（每次启动系统会自动更新）
-# 输入回车键退出系统。'''
-    
+* "add_tag=[xxx,yyy|similar,zzz]" 表示添加标签，其中 |similar 表示添加与该标签语义相似的文档。
+* "del_tag=[xxx,yyy]" 表示删除标签。
+按 Enter 返回。'''
+
+Doc_Op_Help_EN = '''Please select your action:
+
+1. Open the document and enter conversation mode
+2. Open the document
+3. Show document chunk details
+4. Enter conversation mode
+5. Add/remove semantic tags (To be added.)
+6. Add/remove regular tags (To be added.)
+Press Enter to return.'''
+
+Doc_Op_Help_ZH = '''请选择您的操作：
+
+1. 打开文档并进入对话模式
+2. 打开文档
+3. 展示文档chunk详细信息
+4. 进入对话模式
+5. 添加/删除语义标签 (To be added.)
+6. 添加/删除普通标签 (To be added.)
+按 Enter 返回。'''
+
+class Doc_Management:
+    def __init__(self, args):
+        self.doc_dir = args.doc_dir
+        self.language = args.language
+        self.delimiter = '=' * 50
+        
+        self.db = Sqlite_DB(args.db_name)
+
+        self.llm_op = LLM_Operater(args.openai_key, args.proxy)
+
+        self.query_pattern = re.compile(r'query=\[(.*?)\]')
+        self.semantic_tag_pattern = re.compile(r'has_s_tag=\[(.*?)\]')
+        self.no_semantic_tag_pattern = re.compile(r'no_s_tag=\[(.*?)\]')
+        self.regular_tag_pattern = re.compile(r'has_r_tag=\[(.*?)\]')
+        self.no_regular_tag_pattern = re.compile(r'no_r_tag=\[(.*?)\]')
+
+        self.emb_size = 1536
+        self.doc_range_distance = args.doc_range_distance
+        self.chunk_range_distance = args.chunk_range_distance
+
+        self.db.open()
+        doc_list = self.db.search("docs_table", selected_columns=["source"])
+        semantic_tags_result = self.db.search("semantic_tags_table", selected_columns=["tag", "embedding"])
+        regular_tags_result = self.db.search("regular_tags_table", selected_columns=["tag"])
+        self.db.close()
+
+        self.regular_tags_list = [t[0] for t in regular_tags_result]
+        self.doc_list = [d[0] for d in doc_list]
+        # print(self.doc_list)
+
+        self.tag_index = None
+        self.semantic_tags_list = []
+        if len(semantic_tags_result) > 0:
+            self.semantic_tags_list, self.tag_embeddings = zip(*semantic_tags_result)
+            self.semantic_tags_list = list(self.semantic_tags_list)
+            self.tag_embeddings = np.array(list(self.tag_embeddings)).astype('float32')
+
+            self.tag_index = faiss.IndexFlatL2(self.tag_embeddings)
+
+        # print(self.semantic_tags_list)
+        # print(self.doc_list)
+
+        self.tokenizer = tiktoken.get_encoding("cl100k_base")
+
+        self.update_doc()
+
+        if (args.language == 'Chinese') or (args.language == 'chinese'):
+            self.action_help = Action_Help_ZH
+            self.doc_search_help = Doc_Help_ZH
+            self.add_tags_help = Add_Tags_Help_ZH
+            self.doc_op_help = Doc_Op_Help_ZH
+        else:
+            self.action_help = Action_Help_EN
+            self.doc_search_help = Doc_Help_EN
+            self.add_tags_help = Add_Tags_Help_EN
+            self.doc_op_help = Doc_Op_Help_EN
+
     def update_doc(self):
         file_list = os.listdir(self.doc_dir)
-
         tmp_diff = set(file_list) - set(self.doc_list)
         add_list = list(tmp_diff)
-
         tmp_diff = set(self.doc_list) - set(file_list)
         del_list = list(tmp_diff)
-
-        # print(self.doc_list)
-        # file_nums = len(file_list)
-        # print('file nums:', file_nums)
-        # print('add nums:', len(add_list))
-        # print('del nums:', len(del_list))
         self.doc_nums = len(self.doc_list)
+        # add_list = file_list
 
         add_nums = 0
         for item in add_list:
             if(item.endswith('.pdf')):
                 print('Add {} to the DB'.format(item))
-                text_list = self.parse_pdf(os.path.join(self.doc_dir, item))
-
-                self.add_doc(item, text_list)
-
+                pages_list = self.parse_pdf(os.path.join(self.doc_dir, item))
+                self.add_doc(item, pages_list)
                 add_nums += 1
 
         del_nums = 0
@@ -109,6 +171,8 @@ Press Enter to return.'''
         print('del nums:', del_nums)
         print('doc nums:', self.doc_nums)
 
+        # self.update_embs()
+
         if (len(add_list) > 0) or (len(del_list) > 0):
             self.update_embs()
         else:
@@ -118,28 +182,37 @@ Press Enter to return.'''
                 self.doc2id = json.load(f)
             self.doc_index = faiss.read_index("cache/doc_index.faiss")
 
-            with open('cache/id2page.json', 'r', encoding='utf-8') as f:
-                self.id2page = json.load(f)
-            with open('cache/page2id.json', 'r', encoding='utf-8') as f:
-                self.page2id = json.load(f)
-            self.page_index = faiss.read_index("cache/page_index.faiss")
+            with open('cache/id2chunk.json', 'r', encoding='utf-8') as f:
+                self.id2chunk = json.load(f)
+            with open('cache/chunk2id.json', 'r', encoding='utf-8') as f:
+                self.chunk2id = json.load(f)
+            self.chunk_index = faiss.read_index("cache/chunk_index.faiss")
 
         # return file_nums
     
     def update_embs(self):
 
         # embedding doc
-        doc_nodes = self.db.get_nodes('doc')
+        self.db.open()
+        doc_infos = self.db.search("docs_table")
         self.id2doc = {}
         self.doc2id = {}
         doc_embs = []
-        for i, doc_node in enumerate(doc_nodes):
-            name = doc_node['name']
-            summary = doc_node['summary']
-            tags = doc_node['tags']
-            self.id2doc[str(i)] = {'name': name, 'summary': summary, 'tags': tags}
-            self.doc2id[name] = i
-            doc_embs.append(doc_node['embedding'])
+        for i, doc in enumerate(doc_infos):
+            source = doc[0]
+            summary = doc[1]
+            page_nums = doc[2]
+            chunk_nums = doc[3]
+            emb = doc[4]
+            s_tags = self.db.search("semantic_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
+            s_tags = [t[0] for t in s_tags]
+            r_tags = self.db.search("regular_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
+            r_tags = [t[0] for t in r_tags]
+            self.id2doc[str(i)] = {'source': source, 'summary': summary, 'page_nums': page_nums, 'chunk_nums': chunk_nums, \
+                                   'semantic_tags': ','.join(s_tags), 'regular_tags': ','.join(r_tags)}
+            self.doc2id[source] = i
+            doc_embs.append(pickle.loads(emb))
+        self.db.close()
         with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
             json.dump(self.id2doc, f)
         with open('cache/doc2id.json', 'w', encoding='utf-8') as f:
@@ -150,39 +223,68 @@ Press Enter to return.'''
             self.doc_index.add(doc_embs)
             faiss.write_index(self.doc_index, "cache/doc_index.faiss")
 
-        # embedding page
-        page_nodes = self.db.get_nodes('page')
-        self.id2page = {}
-        self.page2id = {}
-        page_embs = []
-        for i, page_node in enumerate(page_nodes):
-            name = page_node['name']
-            page_id = page_node['page_id']
-            # summary = page_node['summary']
-            tags = page_node['tags']
-            self.id2page[str(i)] = {'name': name, 'page_id': page_id, 'tags': tags}
-            self.page2id[name + ' ' + str(page_id)] = i
-            page_embs.append(page_node['embedding'])
-        with open('cache/id2page.json', 'w', encoding='utf-8') as f:
-            json.dump(self.id2page, f)
-        with open('cache/page2id.json', 'w', encoding='utf-8') as f:
-            json.dump(self.page2id, f)
-        if len(page_embs) > 0:
-            page_embs = np.array(page_embs).astype('float32')
-            self.page_index = faiss.IndexFlatL2(self.emb_size)
-            self.page_index.add(page_embs)
-            faiss.write_index(self.page_index, "cache/page_index.faiss")
+        # embedding chunk
+        self.db.open()
+        chunks_infos = self.db.search("chunks_table")
+        self.id2chunk = {}
+        self.chunk2id = {}
+        chunk_embs = []
+        for i, chunk in enumerate(chunks_infos):
+            source = chunk[0]
+            page_span = chunk[1]
+            chunk_id = chunk[2]
+            chunk_text = chunk[3]
+            chunk_summary = chunk[4]
+            # print(source)
+            # print(self.db.search("docs_table", conditions={"source": source}))
+            source_info = self.db.search("docs_table", conditions={"source": source})[0]
+            s_tags = self.db.search("semantic_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
+            s_tags = [t[0] for t in s_tags]
+            r_tags = self.db.search("regular_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
+            r_tags = [t[0] for t in r_tags]
+            self.id2chunk[str(i)] = {'source': source, 'source_summary': source_info[1], 'source_page_nums': source_info[2], 'source_chunk_nums': source_info[3], \
+                                     'semantic_tags': ','.join(s_tags), 'regular_tags': ','.join(r_tags), \
+                                    'page_span': page_span, 'chunk_id': chunk_id, 'chunk_text': chunk_text, 'chunk_summary': chunk_summary}
+            self.chunk2id[f"{source} {page_span} {chunk_id}"] = i
+            chunk_emb = [pickle.loads(chunk[-1])]
+            source_emb = [pickle.loads(source_info[-1])]
+            s_tag_embs = []
+            for tag in s_tags:
+                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                s_tag_embs.append(s_tag_emb)
+            r_tag_embs = []
+            for tag in r_tags:
+                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                r_tag_embs.append(r_tag_emb)
+            embs = source_emb + chunk_emb + s_tag_embs + r_tag_embs
+            # print(len(embs))
+            embs = list(np.mean(np.array(embs), axis=0))
+            chunk_embs.append(embs)
+        self.db.close()
+        with open('cache/id2chunk.json', 'w', encoding='utf-8') as f:
+            json.dump(self.id2chunk, f)
+        with open('cache/chunk2id.json', 'w', encoding='utf-8') as f:
+            json.dump(self.chunk2id, f)
+        if len(chunk_embs) > 0:
+            chunk_embs = np.array(chunk_embs).astype('float32')
+            self.chunk_index = faiss.IndexFlatL2(self.emb_size)
+            self.chunk_index.add(chunk_embs)
+            faiss.write_index(self.chunk_index, "cache/chunk_index.faiss")
 
     def parse_pdf(self, path):
-        item_pdf = fitz.open(path) # pdf document
-        text_list = [page.get_text().replace('\n', ' ') for page in item_pdf]
 
-        return text_list
+        item_pdf = fitz.open(path) # pdf document
+        pages_list = [page.get_text().replace('\n', ' ') for page in item_pdf]
+
+        return pages_list
     
     def search_doc(self, op, search_type='doc'):
-        res = self.semantic_search(op, search_type)
+        res, res_text = self.semantic_search(op, search_type)
 
         while (len(res) > 0):
+
+            print('\n'.join(res_text))
+            print('Number of search results:', len(res))
 
             print('Open the document corresponding to the input ID. Press enter to go back.')
             op = input()
@@ -191,23 +293,18 @@ Press Enter to return.'''
                 break
             
             try:
-                select = res[int(op)]
+                select_idx = int(op)
+                select = res[select_idx]
                 print('Select:')
-                print(select)
-                print('-' * 50)
-                name = select['name']
+                print(res_text[select_idx])
+                source = select['source']
             except Exception as e:
                 print("An error occurred:", e.__class__.__name__)
                 continue
-
+            
+            chunk_infos, chunk_infos_text = self.get_doc_chunks(source)
             while True:
-                print('''Choose your action:
-
-1. Open the document and enter conversation mode
-2. Only open the document
-3. Only enter conversation mode
-4. Add/Del tags
-Press enter to go back.''')
+                print(self.doc_op_help)
 
                 op = input()
 
@@ -215,15 +312,17 @@ Press enter to go back.''')
                     break
 
                 if op == '1':
-                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
-                    page_infos = self.get_doc_pages(name)
-                    self.doc_conversation(page_infos)
+                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
+                    self.doc_conversation(source, chunk_infos)
                 elif op == '2':
-                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, name), '', '', 1)
+                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
                 elif op == '3':
-                    page_infos = self.get_doc_pages(name)
-                    self.doc_conversation(page_infos)
+                    print('\n'.join(chunk_infos_text))
                 elif op == '4':
+                    self.doc_conversation(source, chunk_infos)
+                elif op == '5':
+                    pass
+
                     print(self.add_tags_help)
 
                     op = input()
@@ -245,23 +344,16 @@ Press enter to go back.''')
                         else:
                             print('input error, try again')
     
-    def doc_conversation(self, page_infos):
+    def doc_conversation(self, source, chunk_infos):
         print('Just start the conversation, press enter to exit.')
 
-        page_index = faiss.IndexFlatL2(self.emb_size)
-        # print(page_embs.shape)
-        # print(page_embs)
-        # page_index.add(page_embs)
-        # k = page_embs.shape[0]
+        # chunk_index = faiss.IndexFlatL2(self.emb_size)
         
-        qa_sys = {"role": "system", "content": "You are a professional researcher, please answer my questions based on the context."}
-        check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
-        threshold = 0.6
+        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context."
+        # check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
+        # sys_qa_prompt = f"Answer the question in {self.language}. If unable to answer, please output 'No'."
 
-        # page_infos = sorted(page_infos, key=lambda item: item['page_id'])
-        # print(sorted_by_value)
-
-
+        ans = ''
         while True:
             op = input('Q:')
 
@@ -269,48 +361,41 @@ Press enter to go back.''')
                 print('Exit conversation.')
                 break
             
-
-            check_ans = self.openai_op.get_gpt_res(check_str + 'input:{}\noutput:'.format(op))
+            # question = f'A:{ans}\nQ:{op}' # Rewrite the question based on the {ans} and the {op}.
+            question = op
+            question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
+            print(question)
+            # check_ans = self.llm_op.get_gpt_res(check_str + 'input:{}\noutput:'.format(op))
             # print(check_ans)
             # print(op)
-            if 'Yes' in check_ans:
-                # query_emb = np.array(self.openai_op.get_embedding(op)).astype('float32').reshape(1, -1)
-                # D, I = page_index.search(query_emb, k)
-                # D, I = D[0], I[0]
-                # filtered_indices = I[D < threshold]
-                # filtered_distances = D[D < threshold]
+            # if 'Yes' in check_ans:
 
-                contexts = []
-                # for i, idx in enumerate(filtered_indices):
-                for idx in range(len(page_infos)):
-                    page = page_infos[idx]
-                    # print('page_id:', sim_page['page_id'], ' distance:', filtered_distances[i])
+            contexts = []
+            # for i, idx in enumerate(filtered_indices):
+            for idx in range(len(chunk_infos)):
+                chunk = chunk_infos[idx]
+                page_span = chunk['page_span']
+                chunk_id = chunk['chunk_id']
+                chunk_text = chunk['chunk_text']
 
-                    # Answer the question "{}" based on the relevant contexts.
-                    prompt = 'Doc page {}\nText:{}\nBased on the provided text, answer the question in {}. If unable to answer, return \'No\'.\nQuestion:{}'.format(idx+1, page['text'], self.language, op)
-                    sents = self.openai_op.get_gpt_res(prompt)
-                    tmp = sents[:5]
-                    if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
-                        # print('no related sentences')
-                        # print('-'*50)
-                        continue
-                    print('page_id:', idx+1)
-                    print(sents)
-                    print('-'*50)
-                    contexts.append('page {}: '.format(page['page_id']) + sents)
+                # Answer the question "{}" based on the relevant contexts.
+                prompt = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
+                ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
+                tmp = ans[:5]
+                if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
+                    # print('no related sentences')
+                    # print('-'*50)
+                    continue
+                chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
+                print(chunk_ans)
+                print(self.delimiter)
+                contexts.append(chunk_ans)
 
-                print()
-                context = 'Relevant contexts:' + '\n'.join(contexts) + '\n'
-                prompt = context + 'Summarize the contexts in {}.'.format(self.language)
-            else:
-                prompt = op
-            # print('prompt:', prompt)
-            qa_messages = [qa_sys, {"role": "user", "content": prompt}]
+            # print()
+            ans = self.mapreduce_generation(contexts)
 
-            answer = self.openai_op.conversation(qa_messages)
-
-            print('A:', answer)
-            print('-' * 50)
+            print('A:', ans)
+            print(self.delimiter)
             # qa_messages.append({"role": "assistant", "content": answer})
 
     def doc_name_search(self, doc_name):
@@ -324,16 +409,16 @@ Press enter to go back.''')
             name2id = self.doc2id
             distance_threshold = self.doc_range_distance
         elif search_type == 'page':
-            index = self.page_index
-            id2search = self.id2page
-            name2id = self.page2id
-            distance_threshold = self.page_range_distance
+            index = self.chunk_index
+            id2search = self.id2chunk
+            name2id = self.chunk2id
+            distance_threshold = self.chunk_range_distance
 
         query = self.query_pattern.findall(op)
         filtered_indices = None
         if len(query) > 0:
             query = query[0]
-            query_emb = np.array(self.openai_op.get_embedding(query)).astype('float32').reshape(1, -1)
+            query_emb = np.array(self.llm_op.get_embedding(query)).astype('float32').reshape(1, -1)
 
             # lims, D, I = index.range_search(query_emb, self.doc_range_distance)
             # print(len(id2search))
@@ -341,66 +426,33 @@ Press enter to go back.''')
             D, I = index.search(query_emb, k)
             
             D, I = D[0], I[0]
-            # print(D, I)
 
             filtered_indices = I[D < distance_threshold]
             filtered_distances = D[D < distance_threshold]
     
-        tags = self.tag_pattern.findall(op)
-        no_tags = self.no_tag_pattern.findall(op)
-        
-        condition = []
-        if (len(tags) > 0):
-            tags = tags[0].split(',')
-            tags = ["'" + tag + "'" for tag in tags]
-            condition.append('t.name IN [{}]'.format(','.join(tags)))
-        if len(no_tags) > 0:
-            no_tags = no_tags[0].split(',')
-            no_tags_str = []
-            for no_tag in no_tags:
-                tmp_str = "NOT (n)-[:has_tag]->(:tag {name:'" + no_tag + "'})"
-                # NOT (d)-[:has_tag]->(:tag {name: 'chatgpt'})
-                # print(tmp_str)
-                no_tags_str.append(tmp_str)
-            condition.append(' AND '.join(no_tags_str))
+        s_tags = self.semantic_tag_pattern.findall(op)
+        no_s_tags = self.no_semantic_tag_pattern.findall(op)
+        r_tags = self.regular_tag_pattern.findall(op)
+        no_r_tags = self.no_regular_tag_pattern.findall(op)
 
         tag_res_ids = None
-        if len(condition) > 0:
-            if search_type == 'doc':
-                cypher_str = 'MATCH (n:doc)-[:has_tag]->(t:tag) WHERE {} RETURN n.name'.format(' AND '.join(condition))
-                # print(cypher_str)
-                node_res = self.db.execute_cypher(cypher_str)
-                # print(node_res)
-                tag_res_ids = set()
-                for n in node_res:
-                    tag_res_ids.add(name2id[n['n.name']])
-                tag_res_ids = list(tag_res_ids)
-
-            elif search_type == 'page':
-                cypher_str = 'MATCH (n:page)-[:has_tag]->(t:tag) WHERE {} RETURN n.name, n.page_id'.format(' AND '.join(condition))
-                node_res = self.db.execute_cypher(cypher_str)
-                # print(node_res)
-                # for n in node_res:
-                #     print(n)
-                # tag_res_ids = [name2id[n['name'] + ' ' + str(n['page_id'])] for n in node_res]
-                tag_res_ids = set()
-                for n in node_res:
-                    tag_res_ids.add(name2id[n['name'] + ' ' + str(n['page_id'])])
-                tag_res_ids = list(tag_res_ids)
-
         # print(tag_res_ids)
         res = []
+        res_text = []
         if filtered_indices is not None:
             cnt = 0
             for i, idx in enumerate(filtered_indices):
                 if (tag_res_ids is not None) and (idx not in tag_res_ids):
                     continue
                 tmp = id2search[str(idx)]
+                source = tmp['source']
+                summary = tmp['summary']
+                page_nums = tmp['page_nums']
+                chunk_nums = tmp['chunk_nums']
+                source_s_tags = tmp['semantic_tags']
+                source_r_tags = tmp['regular_tags']
                 res.append(tmp)
-                print(cnt)
-                print(tmp)
-                print('distance:', filtered_distances[i])
-                print('-'*50)
+                res_text.append(f'id: {cnt}\nsource: {source}\nsummary: {summary}\npage_nums: {page_nums}\nchunk_nums: {chunk_nums}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\ndistance: {filtered_distances[i]}\n{self.delimiter}')
                 cnt += 1
         elif tag_res_ids is not None:
             # print(tag_res_ids)
@@ -411,10 +463,8 @@ Press enter to go back.''')
                 print(tmp)
                 print('-'*50)
 
-        print('Number of search results:', len(res))
-        return res
+        return res, res_text
         
-
     def create_semantic_tag(self):
         pass
 
@@ -547,52 +597,183 @@ Press enter to go back.''')
         print('tags:', doc_node['tags'])
         print('================================')
 
-    def get_doc_pages(self, name):
-        page_nodes = self.db.get_nodes('page', name)
+    def get_doc_chunks(self, source):
+        self.db.open()
+        chunks = self.db.search('chunks_table', conditions={"source": source})
+        self.db.close()
 
-        # page_embs = []
-        page_infos = []
-        for page_node in page_nodes:
+        chunk_infos = []
+        chunk_infos_text = []
+        for chunk in chunks:
             # page_embs.append(page_node['embedding'])
-            page_infos.append({'page_id': page_node['page_id'], 'text': page_node['text']})
+            chunk_infos.append({'page_span': chunk[1], 'chunk_id': chunk[2], 'chunk_text': chunk[3], 'chunk_summary': chunk[4]})
+            chunk_infos_text.append(f'page_span: {chunk[1]}\nchunk_id: {chunk[2]}\nchunk_text: {chunk[3]}\n\nchunk_summary: {chunk[4]}\n{self.delimiter}')
         
-        sorted_page_infos = sorted(page_infos, key=lambda x: x['page_id'])
+        # sorted_chunk_infos = sorted(chunk_infos, key=lambda x: x['page_id'])
         # return np.array(page_embs).astype('float32'), page_infos
-        return sorted_page_infos
+        return chunk_infos, chunk_infos_text
     
-    def get_node_name(self, node_type='doc'):
-        nodes = self.db.get_nodes(node_type)
-        names = [n['name'] for n in nodes]
-        return names
+    def get_chunks(self, source, pages_list, chunk_size=1024, chunk_overlap=256):
+
+        chunks = []
+
+        page_lens = []
+        pages_tokens = []
+        for idx, page in enumerate(pages_list):
+            page_tokens = self.tokenizer.encode(page)
+            # page_token_count = len(page_tokens)
+            # page_split = page.split(' ')
+            pages_tokens.extend(page_tokens)
+            page_lens.append(len(pages_tokens))
+
+        start = 0
+        add = chunk_size - chunk_overlap
+        page_idx = 0
+        page_idx_len = page_lens[page_idx]
+        chunk_id = 1
+        while start < len(pages_tokens):
+            # print(page_idx)
+            # print(start, len(pages_tokens))
+            while start >= page_idx_len:
+                page_idx += 1
+                page_idx_len = page_lens[page_idx]
+
+            page_span = [str(page_idx + 1)]
+            span = 0
+            # print(page_lens[page_idx + span])
+            while (start + chunk_size > page_lens[page_idx + span]) and (start + chunk_size < len(pages_tokens)):
+                span += 1
+                page_span.append(str(page_idx + 1 + span))
+            page_span = ','.join(page_span)
+            # if (start + chunk_size <= page_idx_len) or (start + chunk_size >= len(pages_tokens)):
+            #         page_ids = str(page_idx + 1)
+            # else:
+            #     page_ids = str(page_idx + 1) + ',' + str(page_idx + 2)
+
+            chunk = {'source': source, 'page_span': page_span, 'chunk_id': chunk_id, 'chunk_text': self.tokenizer.decode(pages_tokens[start:start+chunk_size])}
+            chunks.append(chunk)
+            chunk_id += 1
+            # print(chunk)
+            # print(self.delimiter)
+
+            if (start + chunk_size >= len(pages_tokens)):
+                break
+
+            start = start + add
+
+            # print((start + chunk_size >= len(pages_tokens)))
+        # print(asd)
+
+        return chunks
     
-    def add_doc(self, item, text_list):
-        # page_node
-        embs = []
-        summaries = []
-        print('page nums:', len(text_list))
-        for i, text in enumerate(text_list):
-            emb = self.openai_op.get_embedding(text)
-            embs.append(emb)
-            
-            if i == 0:
-                summary = self.openai_op.summary_para(text, self.language)
-                summaries.append(summary)
-                # print('page {}:'.format(i+1), summary)
-                print('summary:', summary)
-                print('================================')
-            # break
+    def mapreduce_generation(self, new_spans, prompt="{}\nMerge the paragraphs above.{}", span=8, span_overlap=2):
         
-        # doc_emb = embs[0]
-        # print(doc_emb, type(doc_emb))
-        doc_emb = list(np.mean(np.array(embs), axis=0))
-        # print(doc_emb, type(doc_emb))
-        doc_summary = summaries[0]
-        doc_node = self.db.create_node('doc', item, doc_emb, doc_summary, tags="")
+        print('span nums:',len(new_spans))
 
-        for i in range(len(text_list)):
-            page_node = self.db.create_node('page', item, embs[i], text=text_list[i], page_id=i+1, tags="")
-            self.db.create_relation(doc_node, page_node, 'has_page')
+        if len(new_spans) == 0:
+            return ''
 
-    def del_doc(self, item):
-        self.db.delete_node('doc', item)
-        self.db.delete_node('page', item)
+        while len(new_spans) > 1:
+            old_spans = new_spans
+            start = 0
+            add_span = span - span_overlap
+            new_spans = []
+            while start < len(old_spans):
+                new_span = self.llm_op.prompt_generation(prompt.format(' '.join(old_spans[start:start+span]), self.language))
+                new_spans.append(new_span)
+                start += add_span
+
+                print(new_span)
+
+            print('span nums:',len(new_spans))
+            print(self.delimiter)
+
+        return new_spans[0]
+    
+    def add_doc(self, source, pages_list):
+
+        # print(source)
+        summary_prompt = "{}\nSummarize this paragraph in {}:"
+
+        chunks = self.get_chunks(source, pages_list)
+
+        # print(asd)
+        page_nums = len(pages_list)
+        chunk_nums = len(chunks)
+        print('Page Nums:', page_nums)
+        print('Chunk Nums:', chunk_nums)
+
+        chunk_embs = []
+        chunk_summaries = []
+        print('Process Chunks...')
+        for i, chunk in enumerate(chunks):
+            chunk_text = chunk['chunk_text']
+            text = f"source: {chunk['source']}\npage_span: {chunk['page_span']}\nchunk_id: {chunk['chunk_id']}\nchunk_text: {chunk_text}"
+            chunk_emb = self.llm_op.get_embedding(text)
+            chunk_embs.append(chunk_emb)
+            
+            chunk_summary = self.llm_op.prompt_generation(summary_prompt.format(text, self.language))
+            chunk_summaries.append(chunk_summary)
+
+            chunks[i]['summary'] = chunk_summary
+            chunks[i]['embedding'] = pickle.dumps(chunk_emb)
+
+            print(text)
+            print()
+            # print('chunk {}:'.format(i+1), 'page {}:'.format(chunk['page_span']), chunk_summary)
+            print('chunk_summary:', chunk_summary)
+            print(self.delimiter)
+        print('Done.')
+
+        # print('Process Chunks...')
+        # for i in range(len(chunks)):
+        #     chunk_text = chunks[i]['chunk_text']
+        #     chunk_emb = self.llm_op.get_embedding(chunk_text)
+        #     chunks[i]['chunk_emb'] = pickle.dumps(chunk_emb)
+        # print('Done.')
+
+        doc_emb = list(np.mean(np.array(chunk_embs), axis=0))
+        doc_summary = self.mapreduce_generation(chunk_summaries)
+
+        print('Doc Summary:', doc_summary)
+
+        # print(asd)
+        
+        print('Process Similarily Tags...')
+        add_tags_list = []
+        if self.tag_index is not None:
+            D, I = self.tag_index.search(doc_emb, len(self.semantic_tags_list))
+            D, I = D[0], I[0]
+
+            filtered_indices = I[D < self.doc_range_distance]
+            filtered_distances = D[D < self.doc_range_distance]
+
+            if filtered_indices is not None:
+                for i, idx in enumerate(filtered_indices):
+                    tag = self.semantic_tags_list[idx]
+                    print('similar tag:', tag)
+                    print('distance:', filtered_distances[i])
+                    print('-'*50)
+                    add_tags_list.append(tag)
+        print('Add Similarily Tag Nums:', len(add_tags_list))
+        
+        print('Inserting to DB...')
+        self.db.open()
+        self.db.insert('docs_table', {"source": source, "summary": doc_summary, "page_nums": page_nums, "chunk_nums": chunk_nums, "embedding": pickle.dumps(doc_emb)})
+        # for i, chunk in enumerate(chunks):
+        #     self.db.insert('chunks_table', {"source": source, "page_span": str(i+1), "page_text": pages_list[i], "summary": page_summaries[i], "embedding": pickle.dumps(page_embs[i])})
+        for chunk in chunks:
+            self.db.insert('chunks_table', chunk)
+        for tag in add_tags_list:
+            self.db.insert('semantic_tags2source_table', {"tag": tag, "source": source})
+        self.db.close()
+        print('Done.')
+
+        # print(asd)
+
+    def del_doc(self, source):
+        self.db.open()
+        self.db.delete('docs_table', {"source": source})
+        self.db.delete('pages_table', {"source": source})
+        self.db.delete('chunks_table', {"source": source})
+        self.db.close()
