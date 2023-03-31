@@ -1,8 +1,7 @@
-numpy==1.24.2
-openai==0.27.2
-pandas==1.5.3
-pillow==9.4.0
-py2neo==2021.2.3
-pymupdf==1.21.1
+numpy
+openai
+pandas
+pillow
+pymupdf
 pywin32
 tiktoken
