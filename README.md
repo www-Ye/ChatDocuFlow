@@ -10,13 +10,13 @@ Current include:
 
 * question-answering after entering the paper (questions are answered chunk by chunk and then summarized)
 
+* Chunk-level question-answering (directly using natural language dialogue to locate the corresponding chunk in the article and engage in question-answering)
+
 To be added:
 
 * Semantic tags (newly added papers are automatically added to semantically similar tags)
 
 * Regular tags (manually added and will not automatically include semantically similar papers)
-
-* Chunk-level question-answering (directly using natural language dialogue to locate the corresponding chunk in the article and engage in question-answering)
 
 ### Configuration
 
@@ -62,6 +62,14 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 ![alt text](fig/fig6.png)
 
+Chunk-level Q&A
+
+![alt text](fig/fig7.png)
+
+![alt text](fig/fig8.png)
+
+![alt text](fig/fig9.png)
+
 # 基于OpenAI API/ChatGPT的文档/论文管理系统
 
 这是一个文档/论文管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。用户可以通过自然语言搜索或者标签来检索文档。在选中文档/论文后可以进行对话式问答以了解有关论文的问题。
@@ -74,13 +82,13 @@ Contributions are welcome! Please feel free to open issues or pull requests if y
 
 * 进入论文后可以进行对话式问答，（通过每一块回答问题最后合并总结）
 
+* 文本块级问答（直接通过自然语言对话定位到对应文章的块，并进行问答）
+
 将要加入：
 
 * 语义标签（自动将新增论文添加入语义相似的标签）
 
 * 普通标签（手动添加，不会自动加入语义相似的论文）
-
-* 文本块级问答（直接通过自然语言对话定位到对应文章的块，并进行问答）
 
 ### 配置
 

@@ -46,15 +46,7 @@ def main():
                 DM.search_doc(op, 'doc')
 
         elif op == '2':
-            print('To be added.')
-            pass
-            # while True:
-            #     print('tags:', DM.tag_list)
-            #     print(DM.page_search_help)
-            #     op = input()
-            #     if op == "":
-            #         break
-            #     DM.search(op, 'page')
+            DM.chunk_conversation()
 
         elif op == '3':
             # print('Choose to add semantic tags to documents (input "doc") or pages (input "page").')

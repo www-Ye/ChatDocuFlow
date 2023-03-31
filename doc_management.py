@@ -13,7 +13,7 @@ import tiktoken
 Action_Help_EN = '''Choose your action:
 
 1. Document search - Retrieve relevant documents based on query and tags.
-2. Chunk-level conversation - Retrieve answers to questions based on relevant pages. (To be added.)
+2. Chunk-level conversation - Retrieve answers to questions based on relevant pages.
 3. Add/update semantic tags - Automatically associate similar documents with tags. (To be added.)
 4. Update documents - Update PDF files in the system's folder (automatically done each time the system is started).
 Press Enter to exit the system.'''
@@ -21,7 +21,7 @@ Press Enter to exit the system.'''
 Action_Help_ZH = '''选择你的操作：
 
 1. 文档搜索 - 根据query、tag选择检索相关文档
-2. 块级问答 - 根据问题检索相关页面回答问题 (To be added.)
+2. 块级问答 - 根据问题检索相关页面回答问题
 3. 添加/更新语义标签 - 自动将相似文档与标签进行关联 (To be added.)
 4. 更新文档 - 将文件夹中的pdf更新至系统（每次启动系统会自动更新）
 输入回车键退出系统。'''
@@ -298,7 +298,7 @@ class Doc_Management:
         return pages_list
     
     def search_doc(self, op, search_type='doc'):
-        res, res_text = self.semantic_search(op, search_type)
+        res, res_text = self.semantic_search(op)
 
         while (len(res) > 0):
 
@@ -368,7 +368,7 @@ class Doc_Management:
 
         # chunk_index = faiss.IndexFlatL2(self.emb_size)
         
-        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context."
+        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thought."
         # check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
         # sys_qa_prompt = f"Answer the question in {self.language}. If unable to answer, please output 'No'."
 
@@ -411,7 +411,10 @@ class Doc_Management:
                 contexts.append(chunk_ans)
 
             # print()
-            ans = self.mapreduce_generation(contexts)
+            if len(contexts) > 0:
+                ans = self.mapreduce_generation(contexts)
+            else:
+                ans = self.llm_op.prompt_generation(f'Answer {question} in {self.language}')
 
             print('A:', ans)
             print(self.delimiter)
@@ -420,20 +423,69 @@ class Doc_Management:
     def doc_name_search(self, doc_name):
         pass
 
-    def semantic_search(self, op, search_type='doc'):
+    def chunk_conversation(self):
+        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thought."
 
-        if search_type == 'doc':
-            index = self.doc_index
-            id2search = self.id2doc
-            name2id = self.doc2id
-            distance_threshold = self.doc_range_distance
-        elif search_type == 'page':
-            index = self.chunk_index
-            id2search = self.id2chunk
-            name2id = self.chunk2id
-            distance_threshold = self.chunk_range_distance
+        ans = ''
+
+        while True:
+            op = input('Q:')
+
+            if op == '':
+                print('Exit conversation.')
+                break
+
+            question = f'A:{ans}\nQ:{op}'
+            question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
+            print(question)
+
+            question_emb = np.array(self.llm_op.get_embedding(question)).astype('float32').reshape(1, -1)
+
+            k = len(self.id2chunk)
+            D, I = self.chunk_index.search(question_emb, k)
+            D, I = D[0], I[0]
+            filtered_indices = I[D < self.chunk_range_distance]
+            filtered_distances = D[D < self.chunk_range_distance]
+
+            contexts = []
+            if filtered_indices is not None:
+                for i, idx in enumerate(filtered_indices):
+                    tmp = self.id2chunk[str(idx)]
+                    source = tmp['source']
+                    source_summary = tmp['source_summary']
+                    page_span = tmp['page_span']
+                    chunk_id = tmp['chunk_id']
+                    source_s_tags = tmp['semantic_tags']
+                    source_r_tags = tmp['regular_tags']
+                    chunk_text = tmp['chunk_text']
+                    prompt_text = f'source: {source}\nsource_summary: {source_summary}\npage_span: {page_span}\nchunk_id: {chunk_id}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\nchunk_text: {chunk_text}\n'
+                    ans = self.llm_op.prompt_generation(prompt_text + f'Based on the context, Answer the {question} in {self.language}:', sys_prompt=sys_qa_prompt)
+                    print(prompt_text)
+                    print('chunk_ans:', ans)
+                    print(f'distance: {filtered_distances[i]}\n{self.delimiter}')
+                    contexts.append(ans)
+
+            if len(contexts) > 0:
+                ans = self.mapreduce_generation(contexts)
+            else:
+                ans = self.llm_op.prompt_generation(f'Answer {question} in {self.language}')
+
+            print('A:', ans)
+            print(self.delimiter)
+
+    def semantic_search(self, op):
+
+        # index = self.doc_index
+        # id2search = self.id2doc
+        # name2id = self.doc2id
+        # distance_threshold = self.doc_range_distance
 
         query = self.query_pattern.findall(op)
+        s_tags = self.semantic_tag_pattern.findall(op)
+        no_s_tags = self.no_semantic_tag_pattern.findall(op)
+        r_tags = self.regular_tag_pattern.findall(op)
+        no_r_tags = self.no_regular_tag_pattern.findall(op)
+
         filtered_indices = None
         if len(query) > 0:
             query = query[0]
@@ -441,18 +493,13 @@ class Doc_Management:
 
             # lims, D, I = index.range_search(query_emb, self.doc_range_distance)
             # print(len(id2search))
-            k = len(id2search)
-            D, I = index.search(query_emb, k)
+            k = len(self.id2doc)
+            D, I = self.doc_index.search(query_emb, k)
             
             D, I = D[0], I[0]
 
-            filtered_indices = I[D < distance_threshold]
-            filtered_distances = D[D < distance_threshold]
-    
-        s_tags = self.semantic_tag_pattern.findall(op)
-        no_s_tags = self.no_semantic_tag_pattern.findall(op)
-        r_tags = self.regular_tag_pattern.findall(op)
-        no_r_tags = self.no_regular_tag_pattern.findall(op)
+            filtered_indices = I[D < self.doc_range_distance]
+            filtered_distances = D[D < self.doc_range_distance]
 
         tag_res_ids = None
         # print(tag_res_ids)
@@ -463,7 +510,7 @@ class Doc_Management:
             for i, idx in enumerate(filtered_indices):
                 if (tag_res_ids is not None) and (idx not in tag_res_ids):
                     continue
-                tmp = id2search[str(idx)]
+                tmp = self.id2doc[str(idx)]
                 source = tmp['source']
                 summary = tmp['summary']
                 page_nums = tmp['page_nums']
@@ -476,7 +523,7 @@ class Doc_Management:
         elif tag_res_ids is not None:
             # print(tag_res_ids)
             for i, idx in enumerate(tag_res_ids):
-                tmp = id2search[str(idx)]
+                tmp = self.id2doc[str(idx)]
                 res.append(tmp)
                 print(i)
                 print(tmp)
@@ -512,7 +559,7 @@ class Doc_Management:
                     self.db.create_relation(page_node, tag_node, 'has_tag')
 
             if (select is None) or ((len(tag) > 1) and (tag[1] == 'similar')):
-                res = self.semantic_search("query=[{}]".format(tag_name), 'doc')
+                res = self.semantic_search("query=[{}]".format(tag_name))
 
                 for res_tmp in res:
                     sim_doc_node = self.db.get_nodes('doc', res_tmp['name']).first()
