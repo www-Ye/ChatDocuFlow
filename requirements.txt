@@ -5,3 +5,4 @@ pillow==9.4.0
 py2neo==2021.2.3
 pymupdf==1.21.1
 pywin32
+tiktoken
