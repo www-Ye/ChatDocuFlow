@@ -2,7 +2,7 @@
 
 This is a document/paper management system that allows users to add all PDFs in a folder and index them using OpenAI's embedding technology. Users can retrieve documents through natural language search or tags. After selecting a document/paper, they can engage in question-answering to learn more about the paper.
 
-Current features include:
+Current include:
 
 * Automatic storage of papers in the database from a folder (papers are automatically divided into chunks, summarized and embedded, and then a summary and embedding for the entire paper is obtained)
 
@@ -10,7 +10,7 @@ Current features include:
 
 * question-answering after entering the paper (questions are answered chunk by chunk and then summarized)
 
-Features to be added:
+To be added:
 
 * Semantic tags (newly added papers are automatically added to semantically similar tags)
 
