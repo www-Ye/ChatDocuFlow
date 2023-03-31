@@ -58,10 +58,12 @@ Add_Tags_Help_EN = '''Manually add semantic tags, multiple tags can be separated
 
 Press Enter to return.'''
 
-Add_Tags_Help_ZH = '''手动添加语义标签，多个标签可以用逗号分隔，具体格式如下：
+Add_Tags_Help_ZH = '''添加标签，多个标签可以用逗号分隔，具体格式如下：
 
-* "add_tag=[xxx,yyy|similar,zzz]" 表示添加标签，其中 |similar 表示添加与该标签语义相似的文档。
-* "del_tag=[xxx,yyy]" 表示删除标签。
+* "add_s_tag=[xxx,yyy]" 添加语义标签，当新标签首次创建时会自动添加与该标签语义相似的文档。
+* "del_s_tag=[xxx,yyy]" 删除该文档的语义标签。
+* "add_r_tag=[xxx,yyy]" 添加普通标签
+* "del_r_tag=[xxx,yyy]" 删除普通标签
 按 Enter 返回。'''
 
 Doc_Op_Help_EN = '''Please select your action:
@@ -188,6 +190,12 @@ class Doc_Management:
                 self.chunk2id = json.load(f)
             self.chunk_index = faiss.read_index("cache/chunk_index.faiss")
 
+        self.db.open()
+        doc_list = self.db.search("docs_table", selected_columns=["source"])
+        self.db.close()
+
+        self.doc_list = [d[0] for d in doc_list]
+
         # return file_nums
     
     def update_embs(self):
@@ -203,7 +211,7 @@ class Doc_Management:
             summary = doc[1]
             page_nums = doc[2]
             chunk_nums = doc[3]
-            emb = doc[4]
+            source_emb = doc[4]
             s_tags = self.db.search("semantic_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
             s_tags = [t[0] for t in s_tags]
             r_tags = self.db.search("regular_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
@@ -211,7 +219,18 @@ class Doc_Management:
             self.id2doc[str(i)] = {'source': source, 'summary': summary, 'page_nums': page_nums, 'chunk_nums': chunk_nums, \
                                    'semantic_tags': ','.join(s_tags), 'regular_tags': ','.join(r_tags)}
             self.doc2id[source] = i
-            doc_embs.append(pickle.loads(emb))
+            s_tag_embs = []
+            for tag in s_tags:
+                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                s_tag_embs.append(s_tag_emb)
+            r_tag_embs = []
+            for tag in r_tags:
+                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                r_tag_embs.append(r_tag_emb)
+            source_emb = [pickle.loads(source_emb)]
+            embs = source_emb + s_tag_embs + r_tag_embs
+            embs = list(np.mean(np.array(embs), axis=0))
+            doc_embs.append(embs)
         self.db.close()
         with open('cache/id2doc.json', 'w', encoding='utf-8') as f:
             json.dump(self.id2doc, f)
