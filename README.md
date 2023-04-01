@@ -18,6 +18,8 @@ To be added:
 
 * Regular tags (manually added and will not automatically include semantically similar papers)
 
+* Design some better prompts
+
 ### Configuration
 
 To set up the system, first create a new Conda environment using the following command:
@@ -111,6 +113,8 @@ Storage in SQLite database. / sqlite数据库存储
 * 语义标签（自动将新增论文添加入语义相似的标签）
 
 * 普通标签（手动添加，不会自动加入语义相似的论文）
+
+* 设计更好的prompt
 
 ### 配置
 

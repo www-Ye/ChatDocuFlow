@@ -399,31 +399,34 @@ class Doc_Management:
 
             contexts = []
             # for i, idx in enumerate(filtered_indices):
-            for idx in range(len(chunk_infos)):
-                chunk_emb = chunk_embs[idx]
-                l2_distance = np.linalg.norm(question_emb - chunk_emb)
-                if l2_distance > 0.5:
-                    continue
+            threshold = 0.4
+            while (len(contexts) == 0) and (threshold <= 0.5):
+                for idx in range(len(chunk_infos)):
+                    chunk_emb = chunk_embs[idx]
+                    l2_distance = np.linalg.norm(question_emb - chunk_emb)
+                    if l2_distance >= threshold:
+                        continue
 
-                chunk = chunk_infos[idx]
-                page_span = chunk['page_span']
-                chunk_id = chunk['chunk_id']
-                chunk_text = chunk['chunk_text']
+                    chunk = chunk_infos[idx]
+                    page_span = chunk['page_span']
+                    chunk_id = chunk['chunk_id']
+                    chunk_text = chunk['chunk_text']
 
-                # Answer the question "{}" based on the relevant contexts.
-                prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
-                tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
-                # print(tmp_messages)
-                ans = self.llm_op.conversation(tmp_messages)
-                # ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
-                # tmp = ans[:5]
-                # if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
-                #     continue
-                chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
-                print(chunk_ans)
-                print(f'distance: {l2_distance}')
-                print(self.delimiter)
-                contexts.append(chunk_ans)
+                    # Answer the question "{}" based on the relevant contexts.
+                    prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
+                    tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
+                    # print(tmp_messages)
+                    ans = self.llm_op.conversation(tmp_messages)
+                    # ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
+                    # tmp = ans[:5]
+                    # if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
+                    #     continue
+                    chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
+                    print(chunk_ans)
+                    print(f'distance: {l2_distance}')
+                    print(self.delimiter)
+                    contexts.append(chunk_ans)
+                threshold += 0.05
 
             # print()
             if len(contexts) > 0:
@@ -467,14 +470,20 @@ class Doc_Management:
             question_context = '\n'.join(messages_context) + '\n' + question
             question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
+            threshold = 0.25
+            filtered_indices = []
             k = len(self.id2chunk)
-            D, I = self.chunk_index.search(question_emb, k)
-            D, I = D[0], I[0]
-            filtered_indices = I[D < self.chunk_range_distance]
-            filtered_distances = D[D < self.chunk_range_distance]
+            while (len(filtered_indices) == 0) and (threshold <= self.chunk_range_distance + 0.1):
+                D, I = self.chunk_index.search(question_emb, k)
+                D, I = D[0], I[0]
+                filtered_indices = I[D < threshold]
+                filtered_distances = D[D < threshold]
+                # print(filtered_indices)
+                # print(threshold)
+                threshold += 0.05
 
             contexts = []
-            if filtered_indices is not None:
+            if len(filtered_indices) > 0:
                 for i, idx in enumerate(filtered_indices):
                     tmp = self.id2chunk[str(idx)]
                     source = tmp['source']
@@ -495,7 +504,7 @@ class Doc_Management:
                     contexts.append(f'source: {source}\npage_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}')
 
             if len(contexts) > 0:
-                ans = self.mapreduce_generation(contexts)
+                ans = self.mapreduce_generation(contexts, prompt="{}\nMerge the above paragraphs while preserving the corresponding sources in {}.")
             else:
                 ans = self.llm_op.prompt_generation(f'Answer question in {self.language}. Q:{question}')
 
@@ -769,7 +778,7 @@ class Doc_Management:
 
         return chunks
     
-    def mapreduce_generation(self, new_spans, prompt="{}\nMerge the paragraphs above.{}", span=8, span_overlap=2):
+    def mapreduce_generation(self, new_spans, prompt="{}\nMerge the paragraphs above in {}.", span=8, span_overlap=2):
         
         print('span nums:',len(new_spans))
 
