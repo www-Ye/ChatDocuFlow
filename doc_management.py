@@ -343,7 +343,7 @@ class Doc_Management:
                 elif op == '4':
                     self.doc_conversation(select, chunk_infos, chunk_embs)
                 elif op == '5':
-                    pass
+                    continue
 
                     print(self.add_tags_help)
 
