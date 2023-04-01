@@ -13,7 +13,7 @@ import tiktoken
 Action_Help_EN = '''Choose your action:
 
 1. Document search - Retrieve relevant documents based on query and tags.
-2. Chunk-level conversation - Retrieve answers to questions based on relevant pages.
+2. Chunk-level conversation - Retrieve relevant text chunks based on the question to conduct conversational Q&A.
 3. Add/update semantic tags - Automatically associate similar documents with tags. (To be added.)
 4. Update documents - Update PDF files in the system's folder (automatically done each time the system is started).
 Press Enter to exit the system.'''
@@ -21,7 +21,7 @@ Press Enter to exit the system.'''
 Action_Help_ZH = '''选择你的操作：
 
 1. 文档搜索 - 根据query、tag选择检索相关文档
-2. 块级问答 - 根据问题检索相关页面回答问题
+2. 块级会话 - 根据问题检索相关文本块进行会话问答
 3. 添加/更新语义标签 - 自动将相似文档与标签进行关联 (To be added.)
 4. 更新文档 - 将文件夹中的pdf更新至系统（每次启动系统会自动更新）
 输入回车键退出系统。'''
@@ -110,6 +110,9 @@ class Doc_Management:
         doc_list = self.db.search("docs_table", selected_columns=["source"])
         semantic_tags_result = self.db.search("semantic_tags_table", selected_columns=["tag", "embedding"])
         regular_tags_result = self.db.search("regular_tags_table", selected_columns=["tag"])
+
+        # emb = pickle.loads(self.db.search("docs_table", conditions={"source": "How will Language Modelers like ChatGPT Affect.pdf"}, selected_columns=["embedding"])[0][0])
+        # print(emb)
         self.db.close()
 
         self.regular_tags_list = [t[0] for t in regular_tags_result]
@@ -221,11 +224,11 @@ class Doc_Management:
             self.doc2id[source] = i
             s_tag_embs = []
             for tag in s_tags:
-                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0][0])
                 s_tag_embs.append(s_tag_emb)
             r_tag_embs = []
             for tag in r_tags:
-                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0][0])
                 r_tag_embs.append(r_tag_emb)
             source_emb = [pickle.loads(source_emb)]
             embs = source_emb + s_tag_embs + r_tag_embs
@@ -269,11 +272,11 @@ class Doc_Management:
             source_emb = [pickle.loads(source_info[-1])]
             s_tag_embs = []
             for tag in s_tags:
-                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                s_tag_emb = pickle.loads(self.db.search("semantic_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0][0])
                 s_tag_embs.append(s_tag_emb)
             r_tag_embs = []
             for tag in r_tags:
-                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0])
+                r_tag_emb = pickle.loads(self.db.search("regular_tags_table", conditions={"tag": tag}, selected_columns=["embedding"])[0][0])
                 r_tag_embs.append(r_tag_emb)
             embs = source_emb + chunk_emb + s_tag_embs + r_tag_embs
             # print(len(embs))
@@ -321,7 +324,7 @@ class Doc_Management:
                 print("An error occurred:", e.__class__.__name__)
                 continue
             
-            chunk_infos, chunk_infos_text = self.get_doc_chunks(source)
+            chunk_infos, chunk_infos_text, chunk_embs = self.get_doc_chunks(source)
             while True:
                 print(self.doc_op_help)
 
@@ -332,13 +335,13 @@ class Doc_Management:
 
                 if op == '1':
                     win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
-                    self.doc_conversation(source, chunk_infos)
+                    self.doc_conversation(select, chunk_infos, chunk_embs)
                 elif op == '2':
                     win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
                 elif op == '3':
                     print('\n'.join(chunk_infos_text))
                 elif op == '4':
-                    self.doc_conversation(source, chunk_infos)
+                    self.doc_conversation(select, chunk_infos, chunk_embs)
                 elif op == '5':
                     pass
 
@@ -363,50 +366,62 @@ class Doc_Management:
                         else:
                             print('input error, try again')
     
-    def doc_conversation(self, source, chunk_infos):
+    def doc_conversation(self, select, chunk_infos, chunk_embs):
         print('Just start the conversation, press enter to exit.')
 
         # chunk_index = faiss.IndexFlatL2(self.emb_size)
         
-        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thought."
-        # check_str = 'Check whether the given statement requires retrieval of related webpage context for answering, respond with "Yes" if retrieval is necessary, or "No" if it is not necessary.\n\nExample:\ninput: What is the main content of this article?\noutput: Yes\n\ninput: Can you explain your answer?\noutput: No\n\n'
-        # sys_qa_prompt = f"Answer the question in {self.language}. If unable to answer, please output 'No'."
+        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thoughts."
+        sys_message = [{"role": "system", "content": sys_qa_prompt}]
 
-        ans = ''
+        source = select['source']
+        source_summary = select['summary']
+        messages = [{"role": "user", "content": source}, {"role": "assistant", "content": source_summary}]
+        messages_context = [source, source_summary]
+
         while True:
             op = input('Q:')
 
             if op == '':
                 print('Exit conversation.')
                 break
+
+            messages = messages[-4:]
+            messages_context = messages_context[-4:]
             
             # question = f'A:{ans}\nQ:{op}' # Rewrite the question based on the {ans} and the {op}.
             question = op
-            question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
-            print(question)
-            # check_ans = self.llm_op.get_gpt_res(check_str + 'input:{}\noutput:'.format(op))
-            # print(check_ans)
-            # print(op)
-            # if 'Yes' in check_ans:
+            # question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
+            # print('Q:', question)
+
+            question_context = '\n'.join(messages_context) + '\n' + question
+            question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
             contexts = []
             # for i, idx in enumerate(filtered_indices):
             for idx in range(len(chunk_infos)):
+                chunk_emb = chunk_embs[idx]
+                l2_distance = np.linalg.norm(question_emb - chunk_emb)
+                if l2_distance > 0.5:
+                    continue
+
                 chunk = chunk_infos[idx]
                 page_span = chunk['page_span']
                 chunk_id = chunk['chunk_id']
                 chunk_text = chunk['chunk_text']
 
                 # Answer the question "{}" based on the relevant contexts.
-                prompt = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
-                ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
-                tmp = ans[:5]
-                if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
-                    # print('no related sentences')
-                    # print('-'*50)
-                    continue
+                prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
+                tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
+                # print(tmp_messages)
+                ans = self.llm_op.conversation(tmp_messages)
+                # ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
+                # tmp = ans[:5]
+                # if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
+                #     continue
                 chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
                 print(chunk_ans)
+                print(f'distance: {l2_distance}')
                 print(self.delimiter)
                 contexts.append(chunk_ans)
 
@@ -414,19 +429,25 @@ class Doc_Management:
             if len(contexts) > 0:
                 ans = self.mapreduce_generation(contexts)
             else:
-                ans = self.llm_op.prompt_generation(f'Answer {question} in {self.language}')
+                ans = self.llm_op.prompt_generation(f'Answer question in {self.language}. Q:{question}')
 
             print('A:', ans)
             print(self.delimiter)
-            # qa_messages.append({"role": "assistant", "content": answer})
+
+            messages.append({"role": "user", "content": op})
+            messages.append({"role": "assistant", "content": ans})
+            messages_context.append(op)
+            messages_context.append(ans)
 
     def doc_name_search(self, doc_name):
         pass
 
     def chunk_conversation(self):
-        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thought."
+        sys_qa_prompt = "You are a professional researcher, please answer my questions based on the context and your own thoughts."
+        sys_message = [{"role": "system", "content": sys_qa_prompt}]
 
-        ans = ''
+        messages = []
+        messages_context = []
 
         while True:
             op = input('Q:')
@@ -435,11 +456,16 @@ class Doc_Management:
                 print('Exit conversation.')
                 break
 
-            question = f'A:{ans}\nQ:{op}'
-            question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
-            print(question)
+            messages = messages[-4:]
+            messages_context = messages_context[-4:]
 
-            question_emb = np.array(self.llm_op.get_embedding(question)).astype('float32').reshape(1, -1)
+            # question = f'A:{ans}\nQ:{op}'
+            question = op
+            # question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
+            # print('Q:', question)
+
+            question_context = '\n'.join(messages_context) + '\n' + question
+            question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
             k = len(self.id2chunk)
             D, I = self.chunk_index.search(question_emb, k)
@@ -459,19 +485,27 @@ class Doc_Management:
                     source_r_tags = tmp['regular_tags']
                     chunk_text = tmp['chunk_text']
                     prompt_text = f'source: {source}\nsource_summary: {source_summary}\npage_span: {page_span}\nchunk_id: {chunk_id}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\nchunk_text: {chunk_text}\n'
-                    ans = self.llm_op.prompt_generation(prompt_text + f'Based on the context, Answer the {question} in {self.language}:', sys_prompt=sys_qa_prompt)
+                    tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f'Based on the context, Answer the question in {self.language}. Q:{question}'}]
+                    # print(tmp_messages)
+                    ans = self.llm_op.conversation(tmp_messages)
+                    # ans = self.llm_op.prompt_generation(prompt_text + f'Based on the context, Answer the {question} in {self.language}:', sys_prompt=sys_qa_prompt)
                     print(prompt_text)
                     print('chunk_ans:', ans)
                     print(f'distance: {filtered_distances[i]}\n{self.delimiter}')
-                    contexts.append(ans)
+                    contexts.append(f'source: {source}\npage_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}')
 
             if len(contexts) > 0:
                 ans = self.mapreduce_generation(contexts)
             else:
-                ans = self.llm_op.prompt_generation(f'Answer {question} in {self.language}')
+                ans = self.llm_op.prompt_generation(f'Answer question in {self.language}. Q:{question}')
 
             print('A:', ans)
             print(self.delimiter)
+
+            messages.append({"role": "user", "content": op})
+            messages.append({"role": "assistant", "content": ans})
+            messages_context.append(op)
+            messages_context.append(ans)
 
     def semantic_search(self, op):
 
@@ -670,14 +704,17 @@ class Doc_Management:
 
         chunk_infos = []
         chunk_infos_text = []
+        chunk_embs = []
         for chunk in chunks:
             # page_embs.append(page_node['embedding'])
             chunk_infos.append({'page_span': chunk[1], 'chunk_id': chunk[2], 'chunk_text': chunk[3], 'chunk_summary': chunk[4]})
             chunk_infos_text.append(f'page_span: {chunk[1]}\nchunk_id: {chunk[2]}\nchunk_text: {chunk[3]}\n\nchunk_summary: {chunk[4]}\n{self.delimiter}')
+            chunk_embs.append(pickle.loads(chunk[-1]))
         
+        chunk_embs = np.array(chunk_embs).astype('float32')
         # sorted_chunk_infos = sorted(chunk_infos, key=lambda x: x['page_id'])
         # return np.array(page_embs).astype('float32'), page_infos
-        return chunk_infos, chunk_infos_text
+        return chunk_infos, chunk_infos_text, chunk_embs
     
     def get_chunks(self, source, pages_list, chunk_size=1024, chunk_overlap=256):
 
