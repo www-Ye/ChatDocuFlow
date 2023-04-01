@@ -376,8 +376,11 @@ class Doc_Management:
 
         source = select['source']
         source_summary = select['summary']
-        messages = [{"role": "user", "content": source}, {"role": "assistant", "content": source_summary}]
-        messages_context = [source, source_summary]
+        source_messages = [{"role": "user", "content": source}, {"role": "assistant", "content": source_summary}]
+        source_messages_context = [source, source_summary]
+
+        messages = []
+        messages_context = []
 
         while True:
             op = input('Q:')
@@ -389,18 +392,18 @@ class Doc_Management:
             messages = messages[-4:]
             messages_context = messages_context[-4:]
             
-            # question = f'A:{ans}\nQ:{op}' # Rewrite the question based on the {ans} and the {op}.
             question = op
             # question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
             # print('Q:', question)
 
-            question_context = '\n'.join(messages_context) + '\n' + question
+            question_context = '\n'.join(source_messages_context + messages_context) + '\n' + question
+            # print(question_context)
             question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
             contexts = []
             # for i, idx in enumerate(filtered_indices):
             threshold = 0.4
-            while (len(contexts) == 0) and (threshold <= 0.5):
+            while (len(contexts) == 0) and (threshold <= 0.55):
                 for idx in range(len(chunk_infos)):
                     chunk_emb = chunk_embs[idx]
                     l2_distance = np.linalg.norm(question_emb - chunk_emb)
@@ -414,7 +417,7 @@ class Doc_Management:
 
                     # Answer the question "{}" based on the relevant contexts.
                     prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
-                    tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
+                    tmp_messages = sys_message + source_messages + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
                     # print(tmp_messages)
                     ans = self.llm_op.conversation(tmp_messages)
                     # ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
