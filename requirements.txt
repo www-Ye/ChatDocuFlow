@@ -3,5 +3,4 @@ openai
 pandas
 pillow
 pymupdf
-pywin32
 tiktoken

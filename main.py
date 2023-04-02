@@ -11,6 +11,7 @@ def main():
     parser.add_argument("--language", default="Chinese", type=str)
     parser.add_argument("--doc_range_distance", default=0.4, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
     parser.add_argument("--chunk_range_distance", default=0.3, type=float, help="The chunk retrieval threshold returns higher similarity for closer distances.")
+    parser.add_argument("--system", default="windows", type=str, help="windows/mac")
 
     parser.add_argument("--openai_key", default="", type=str)
     parser.add_argument("--proxy", default="", type=str)

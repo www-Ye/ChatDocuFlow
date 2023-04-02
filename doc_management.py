@@ -1,7 +1,8 @@
 from db_operater import Sqlite_DB
 from llm_operater import LLM_Operater
 import numpy as np
-import win32api
+# import win32api
+import subprocess
 import pickle
 import faiss
 import json
@@ -91,6 +92,7 @@ class Doc_Management:
         self.doc_dir = args.doc_dir
         self.language = args.language
         self.delimiter = '=' * 50
+        self.system = args.system
         
         self.db = Sqlite_DB(args.db_name)
 
@@ -334,10 +336,16 @@ class Doc_Management:
                     break
 
                 if op == '1':
-                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
+                    if self.system == 'windows':
+                        os.startfile(os.path.join(self.doc_dir, source))
+                    else:
+                        subprocess.call(['open', os.path.join(self.doc_dir, source)])
                     self.doc_conversation(select, chunk_infos, chunk_embs)
                 elif op == '2':
-                    win32api.ShellExecute(0, 'open', os.path.join(self.doc_dir, source), '', '', 1)
+                    if self.system == 'windows':
+                        os.startfile(os.path.join(self.doc_dir, source))
+                    else:
+                        subprocess.call(['open', os.path.join(self.doc_dir, source)])
                 elif op == '3':
                     print('\n'.join(chunk_infos_text))
                 elif op == '4':
