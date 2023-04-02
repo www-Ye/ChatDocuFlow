@@ -38,9 +38,9 @@ pip install -r requirements.txt
 
 Start the system by running:
 
-```python main.py --openai_key xxx --language English```
+```python main.py --openai_key xxx --language English --system windows```
 
-Replace xxx with your OpenAI API key and replace the parameter after "language" with the desired language.
+Replace xxx with your OpenAI API key and replace the parameter after "language" with the desired language. The parameter "system" is either "windows" or "mac".
 
 ### Usage
 
@@ -134,9 +134,9 @@ pip install -r requirements.txt
 
 通过运行以下命令启动系统：
 
-```python main.py --openai_key xxx --language Chinese```
+```python main.py --openai_key xxx --language Chinese --system windows```
 
-将 xxx 替换为您的OpenAI API密钥，language 后参数替换为所需的语言。
+将 xxx 替换为您的OpenAI API密钥，language 后参数替换为所需的语言。system参数为windows或mac。
 
 ### 使用
 
