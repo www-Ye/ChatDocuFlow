@@ -5,7 +5,7 @@ class Sqlite_DB:
         self.db_name = db_name
 
         self.open()
-        self.create_table('docs_table', {"source": "TEXT", "summary": "TEXT", "page_nums": "TEXT", "chunk_nums": "TEXT", "embedding": "BLOB"})
+        self.create_table('docs_table', {"source": "TEXT", "gen_title": "TEXT", "summary": "TEXT", "page_nums": "TEXT", "chunk_nums": "TEXT", "embedding": "BLOB"})
         # self.create_table('pages_table', {"source": "TEXT", "page_id": "TEXT", "page_text": "TEXT", "summary": "TEXT", "embedding": "BLOB"})
         self.create_table('chunks_table', {"source": "TEXT", "page_span": "TEXT", "chunk_id": "TEXT", "chunk_text": "TEXT", "summary": "TEXT", "embedding": "BLOB"})
         self.create_table('semantic_tags_table', {"tag": "TEXT", "embedding": "BLOB"})

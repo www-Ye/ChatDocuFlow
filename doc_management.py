@@ -1,6 +1,8 @@
 from db_operater import Sqlite_DB
 from llm_operater import LLM_Operater
 import numpy as np
+import pandas as pd
+from tqdm import tqdm
 # import win32api
 import subprocess
 import pickle
@@ -134,6 +136,7 @@ class Doc_Management:
         # print(self.doc_list)
 
         self.tokenizer = tiktoken.get_encoding("cl100k_base")
+        # self.token_cost = pd.read_csv()
 
         self.update_doc()
 
@@ -213,15 +216,16 @@ class Doc_Management:
         doc_embs = []
         for i, doc in enumerate(doc_infos):
             source = doc[0]
-            summary = doc[1]
-            page_nums = doc[2]
-            chunk_nums = doc[3]
-            source_emb = doc[4]
+            gen_title = doc[1]
+            summary = doc[2]
+            page_nums = doc[3]
+            chunk_nums = doc[4]
+            source_emb = doc[5]
             s_tags = self.db.search("semantic_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
             s_tags = [t[0] for t in s_tags]
             r_tags = self.db.search("regular_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
             r_tags = [t[0] for t in r_tags]
-            self.id2doc[str(i)] = {'source': source, 'summary': summary, 'page_nums': page_nums, 'chunk_nums': chunk_nums, \
+            self.id2doc[str(i)] = {'source': source, 'gen_title': gen_title, 'summary': summary, 'page_nums': page_nums, 'chunk_nums': chunk_nums, \
                                    'semantic_tags': ','.join(s_tags), 'regular_tags': ','.join(r_tags)}
             self.doc2id[source] = i
             s_tag_embs = []
@@ -266,7 +270,7 @@ class Doc_Management:
             s_tags = [t[0] for t in s_tags]
             r_tags = self.db.search("regular_tags2source_table", conditions={"source": source}, selected_columns=["tag"])
             r_tags = [t[0] for t in r_tags]
-            self.id2chunk[str(i)] = {'source': source, 'source_summary': source_info[1], 'source_page_nums': source_info[2], 'source_chunk_nums': source_info[3], \
+            self.id2chunk[str(i)] = {'source': source, 'source_gen_title': source_info[1], 'source_summary': source_info[2], 'source_page_nums': source_info[3], 'source_chunk_nums': source_info[4], \
                                      'semantic_tags': ','.join(s_tags), 'regular_tags': ','.join(r_tags), \
                                     'page_span': page_span, 'chunk_id': chunk_id, 'chunk_text': chunk_text, 'chunk_summary': chunk_summary}
             self.chunk2id[f"{source} {page_span} {chunk_id}"] = i
@@ -397,8 +401,8 @@ class Doc_Management:
                 print('Exit conversation.')
                 break
 
-            messages = messages[-4:]
-            messages_context = messages_context[-4:]
+            messages = messages[-6:]
+            messages_context = messages_context[-6:]
             
             question = op
             # question = self.llm_op.prompt_generation(f'{question}\nRewrite the question.')
@@ -411,6 +415,8 @@ class Doc_Management:
             contexts = []
             # for i, idx in enumerate(filtered_indices):
             threshold = 0.4
+            pages = []
+            chunks = set()
             while (len(contexts) == 0) and (threshold <= 0.55):
                 for idx in range(len(chunk_infos)):
                     chunk_emb = chunk_embs[idx]
@@ -424,24 +430,28 @@ class Doc_Management:
                     chunk_text = chunk['chunk_text']
 
                     # Answer the question "{}" based on the relevant contexts.
-                    prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}\n'
-                    tmp_messages = sys_message + source_messages + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
+                    prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_text: {chunk_text}'
+                    pages.extend(page_span.split(','))
+                    chunks.add(chunk_id)
+                    # tmp_messages = sys_message + source_messages + messages + [{"role": "user", "content": prompt_text + f"Based on the context, Answer the question in {self.language}. Q:{question}"}]
                     # print(tmp_messages)
-                    ans = self.llm_op.conversation(tmp_messages)
+                    # ans = self.llm_op.conversation(tmp_messages)
                     # ans = self.llm_op.prompt_generation(prompt + f"Answer the {question} in {self.language}. If unable to answer, please output 'No'.", sys_prompt=sys_qa_prompt)
                     # tmp = ans[:5]
                     # if ('No' in tmp) or ('no' in tmp) or ('NO' in tmp):
                     #     continue
-                    chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
-                    print(chunk_ans)
-                    print(f'distance: {l2_distance}')
-                    print(self.delimiter)
-                    contexts.append(chunk_ans)
+                    # chunk_ans = f'page_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}'
+                    # print(chunk_ans)
+                    # print(f'distance: {l2_distance}')
+                    # print(self.delimiter)
+                    contexts.append(prompt_text)
                 threshold += 0.05
 
-            # print()
+            pages_list = sorted(list(set(pages)), key=int)
+            chunks_list = sorted(list(chunks), key=int)
+            print('pages:{}\nchunks:{}'.format(','.join(pages_list), ','.join(chunks_list)))
             if len(contexts) > 0:
-                ans = self.mapreduce_generation(contexts)
+                ans = self.mapreduce_generation(contexts, prompt='paragraphs:[{}]\nBased on the context, Answer the question in {}. Q:' + question, messages=sys_message + messages)
             else:
                 ans = self.llm_op.prompt_generation(f'Answer question in {self.language}. Q:{question}')
 
@@ -470,8 +480,8 @@ class Doc_Management:
                 print('Exit conversation.')
                 break
 
-            messages = messages[-4:]
-            messages_context = messages_context[-4:]
+            messages = messages[-6:]
+            messages_context = messages_context[-6:]
 
             # question = f'A:{ans}\nQ:{op}'
             question = op
@@ -481,10 +491,10 @@ class Doc_Management:
             question_context = '\n'.join(messages_context) + '\n' + question
             question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
-            threshold = 0.25
+            threshold = 0.2
             filtered_indices = []
             k = len(self.id2chunk)
-            while (len(filtered_indices) == 0) and (threshold <= self.chunk_range_distance + 0.1):
+            while (len(filtered_indices) == 0) and (threshold <= self.chunk_range_distance + 0.2):
                 D, I = self.chunk_index.search(question_emb, k)
                 D, I = D[0], I[0]
                 filtered_indices = I[D < threshold]
@@ -494,28 +504,46 @@ class Doc_Management:
                 threshold += 0.05
 
             contexts = []
+            sources_info_dict = {}
             if len(filtered_indices) > 0:
                 for i, idx in enumerate(filtered_indices):
                     tmp = self.id2chunk[str(idx)]
                     source = tmp['source']
+                    source_gen_title = tmp['source_gen_title']
                     source_summary = tmp['source_summary']
                     page_span = tmp['page_span']
                     chunk_id = tmp['chunk_id']
                     source_s_tags = tmp['semantic_tags']
                     source_r_tags = tmp['regular_tags']
                     chunk_text = tmp['chunk_text']
-                    prompt_text = f'source: {source}\nsource_summary: {source_summary}\npage_span: {page_span}\nchunk_id: {chunk_id}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\nchunk_text: {chunk_text}\n'
-                    tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f'Based on the context, Answer the question in {self.language}. Q:{question}'}]
+                    source_info = f'source: {source}\nsource_gen_title:{source_gen_title}\nsource_summary: {source_summary}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}'
+                    # print(source_info)
+                    if source_info not in sources_info_dict:
+                        sources_info_dict[source_info] = {'pages': page_span.split(','), 'chunks': set([chunk_id])}
+                        # sources_info_dict[sources_info_dict]['pages'] = page_span.split(',')
+                        # sources_info_dict[sources_info_dict]['chunks'] = set([chunk_id])
+                    else:
+                        sources_info_dict[source_info]['pages'].extend(page_span.split(','))
+                        sources_info_dict[source_info]['chunks'].add(chunk_id)
+                    prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}]\nchunk_text: {chunk_text}'
+                    # tmp_messages = sys_message + messages + [{"role": "user", "content": prompt_text + f'Based on the context, Answer the question in {self.language}. Q:{question}'}]
                     # print(tmp_messages)
-                    ans = self.llm_op.conversation(tmp_messages)
+                    # ans = self.llm_op.conversation(tmp_messages)
                     # ans = self.llm_op.prompt_generation(prompt_text + f'Based on the context, Answer the {question} in {self.language}:', sys_prompt=sys_qa_prompt)
-                    print(prompt_text)
-                    print('chunk_ans:', ans)
-                    print(f'distance: {filtered_distances[i]}\n{self.delimiter}')
-                    contexts.append(f'source: {source}\npage_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}')
-
+                    # print(prompt_text)
+                    # print('chunk_ans:', ans)
+                    # print(f'distance: {filtered_distances[i]}\n{self.delimiter}')
+                    # contexts.append(f'source: {source}\npage_span: {page_span}\nchunk_id: {chunk_id}\nchunk_ans: {ans}')
+                    contexts.append(f'source: {source}\n' + prompt_text)
+            # print(sources_info_dict) ###
+            for key, v in sources_info_dict.items():
+                print(key)
+                pages_list = sorted(list(set(v['pages'])), key=int)
+                chunks_list = sorted(list(set(v['chunks'])), key=int)
+                # print(pages_list, chunks_list)
+                print('pages:{}\nchunks:{}'.format(','.join(pages_list), ','.join(chunks_list)))
             if len(contexts) > 0:
-                ans = self.mapreduce_generation(contexts, prompt="{}\nMerge the above paragraphs while preserving the corresponding sources in {}.")
+                ans = self.mapreduce_generation(contexts, prompt='paragraphs:[{}]\nBased on the context, Answer the question in {}. Q:' + question, messages=sys_message + messages, merge_prompt="{}\nMerge the above paragraphs while preserving the corresponding sources in {} and slightly condense them.")
             else:
                 ans = self.llm_op.prompt_generation(f'Answer question in {self.language}. Q:{question}')
 
@@ -566,13 +594,14 @@ class Doc_Management:
                     continue
                 tmp = self.id2doc[str(idx)]
                 source = tmp['source']
+                gen_title = tmp['gen_title']
                 summary = tmp['summary']
                 page_nums = tmp['page_nums']
                 chunk_nums = tmp['chunk_nums']
                 source_s_tags = tmp['semantic_tags']
                 source_r_tags = tmp['regular_tags']
                 res.append(tmp)
-                res_text.append(f'id: {cnt}\nsource: {source}\nsummary: {summary}\npage_nums: {page_nums}\nchunk_nums: {chunk_nums}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\ndistance: {filtered_distances[i]}\n{self.delimiter}')
+                res_text.append(f'id: {cnt}\nsource: {source}\ngen_title: {gen_title}\nsummary: {summary}\npage_nums: {page_nums}\nchunk_nums: {chunk_nums}\nsemantic_tags: {source_s_tags}\nregular_tags: {source_r_tags}\ndistance: {filtered_distances[i]}\n{self.delimiter}')
                 cnt += 1
         elif tag_res_ids is not None:
             # print(tag_res_ids)
@@ -727,8 +756,8 @@ class Doc_Management:
         chunk_embs = []
         for chunk in chunks:
             # page_embs.append(page_node['embedding'])
-            chunk_infos.append({'page_span': chunk[1], 'chunk_id': chunk[2], 'chunk_text': chunk[3], 'chunk_summary': chunk[4]})
-            chunk_infos_text.append(f'page_span: {chunk[1]}\nchunk_id: {chunk[2]}\nchunk_text: {chunk[3]}\n\nchunk_summary: {chunk[4]}\n{self.delimiter}')
+            chunk_infos.append({'page_span': chunk[1], 'chunk_id': chunk[2], 'chunk_text': chunk[3]})
+            chunk_infos_text.append(f'page_span: {chunk[1]}\nchunk_id: {chunk[2]}\nchunk_text: {chunk[3]}\n{self.delimiter}')
             chunk_embs.append(pickle.loads(chunk[-1]))
         
         chunk_embs = np.array(chunk_embs).astype('float32')
@@ -736,19 +765,22 @@ class Doc_Management:
         # return np.array(page_embs).astype('float32'), page_infos
         return chunk_infos, chunk_infos_text, chunk_embs
     
-    def get_chunks(self, source, pages_list, chunk_size=1024, chunk_overlap=256):
+    def get_chunks(self, source, pages_list, chunk_size=128, chunk_overlap=32):
 
         chunks = []
 
         page_lens = []
         pages_tokens = []
+        # token_nums = 0
         for idx, page in enumerate(pages_list):
             page_tokens = self.tokenizer.encode(page)
+            # token_nums += len(page_tokens)
             # page_token_count = len(page_tokens)
             # page_split = page.split(' ')
             pages_tokens.extend(page_tokens)
             page_lens.append(len(pages_tokens))
-
+        # print(token_nums)
+        # print(asd)
         start = 0
         add = chunk_size - chunk_overlap
         page_idx = 0
@@ -789,34 +821,73 @@ class Doc_Management:
 
         return chunks
     
-    def mapreduce_generation(self, new_spans, prompt="{}\nMerge the paragraphs above in {}.", span=8, span_overlap=2):
+    def mapreduce_generation(self, new_spans, prompt, messages=None, merge_prompt="{}\nMerge the paragraphs above in {} and slightly condense them.", saved_path=None):
         
-        print('span nums:',len(new_spans))
+        print('span nums:', len(new_spans))
 
         if len(new_spans) == 0:
             return ''
 
-        while len(new_spans) > 1:
+        saved_texts = []
+        # add_span = span - span_overlap
+
+        # old_spans = new_spans
+        # start = 0
+        # add_span = span - span_overlap
+        # new_spans = []
+        # while start < len(old_spans):
+        #     if messages is not None:
+        #         new_span = self.llm_op.conversation(messages + [{"role": "user", "content": prompt.format('\n'.join(old_spans[start:start+span]), self.language)}])
+        #     else:
+        #         new_span = self.llm_op.prompt_generation(prompt.format(' '.join(old_spans[start:start+span]), self.language))
+        #     new_spans.append(new_span)
+        #     start += add_span
+
+        #     print(new_span)
+        flag = True
+        while flag or (len(new_spans) > 1):
+            flag = False
             old_spans = new_spans
+            sum_span_tokens = 0
+            for span in old_spans:
+                span_tokens = self.tokenizer.encode(span)
+                sum_span_tokens += len(span_tokens)
+            avg_span_tokens_nums = 1. * sum_span_tokens / len(old_spans)
+            span = int(3072. / avg_span_tokens_nums)
+            span_overlap = int(span * 0.2)
+            print(f'span:{span}  span_overlap:{span_overlap}')
             start = 0
             add_span = span - span_overlap
             new_spans = []
             while start < len(old_spans):
-                new_span = self.llm_op.prompt_generation(prompt.format(' '.join(old_spans[start:start+span]), self.language))
+                if messages is not None:
+                    new_span = self.llm_op.conversation(messages + [{"role": "user", "content": prompt.format('\n'.join(old_spans[start:start+span]), self.language)}])
+                else:
+                    new_span = self.llm_op.prompt_generation(prompt.format(' '.join(old_spans[start:start+span]), self.language))
                 new_spans.append(new_span)
+                saved_texts.append(new_span)
                 start += add_span
 
                 print(new_span)
 
             print('span nums:',len(new_spans))
             print(self.delimiter)
+            saved_texts.append('span nums:{}'.format(len(new_spans)))
+            saved_texts.append(self.delimiter)
+
+        if saved_path is not None:
+            with open(saved_path, 'w', encoding='utf-8') as f:
+                for t in saved_texts:
+                    f.write(t + '\n')
+                    f.write('-'*50 + '\n')
 
         return new_spans[0]
     
     def add_doc(self, source, pages_list):
 
         # print(source)
-        summary_prompt = "{}\nSummarize this paragraph in {}:"
+        summary_prompt = "paragraphs:[{}]\nGenerate a summary in {} for these paragraphs."
+        title_prompt = "paragraphs:[{}]\nGenerate a title in {} for these paragraphs."
 
         chunks = self.get_chunks(source, pages_list)
 
@@ -827,25 +898,27 @@ class Doc_Management:
         print('Chunk Nums:', chunk_nums)
 
         chunk_embs = []
-        chunk_summaries = []
+        # chunk_summaries = []
+        chunks_text = []
         print('Process Chunks...')
-        for i, chunk in enumerate(chunks):
+        for i, chunk in tqdm(enumerate(chunks)):
             chunk_text = chunk['chunk_text']
             text = f"source: {chunk['source']}\npage_span: {chunk['page_span']}\nchunk_id: {chunk['chunk_id']}\nchunk_text: {chunk_text}"
             chunk_emb = self.llm_op.get_embedding(text)
             chunk_embs.append(chunk_emb)
             
-            chunk_summary = self.llm_op.prompt_generation(summary_prompt.format(text, self.language))
-            chunk_summaries.append(chunk_summary)
+            chunks_text.append(chunk_text)
+            # chunk_summary = self.llm_op.prompt_generation(summary_prompt.format(text, self.language))
+            # chunk_summaries.append(chunk_summary)
 
-            chunks[i]['summary'] = chunk_summary
+            # chunks[i]['summary'] = chunk_summary
             chunks[i]['embedding'] = pickle.dumps(chunk_emb)
 
-            print(text)
-            print()
+            # print(text)
+            # print()
             # print('chunk {}:'.format(i+1), 'page {}:'.format(chunk['page_span']), chunk_summary)
-            print('chunk_summary:', chunk_summary)
-            print(self.delimiter)
+            # print('chunk_summary:', chunk_summary)
+            # print(self.delimiter)
         print('Done.')
 
         # print('Process Chunks...')
@@ -855,9 +928,15 @@ class Doc_Management:
         #     chunks[i]['chunk_emb'] = pickle.dumps(chunk_emb)
         # print('Done.')
 
-        doc_emb = list(np.mean(np.array(chunk_embs), axis=0))
-        doc_summary = self.mapreduce_generation(chunk_summaries)
+        # print(asd)
 
+        saved_path = source[:-4] + '.txt'
+        doc_title = self.mapreduce_generation(chunks_text, title_prompt)
+        doc_summary = self.mapreduce_generation(chunks_text, summary_prompt, saved_path=os.path.join('saved', saved_path))
+        t_doc_emb = [self.llm_op.get_embedding(f'source:{source}\ngen_title:{doc_title}\nsummary:{doc_summary}')]
+        doc_emb = list(np.mean(np.array(t_doc_emb + chunk_embs), axis=0))
+
+        print('Doc Title:', doc_title)
         print('Doc Summary:', doc_summary)
 
         # print(asd)
@@ -882,7 +961,7 @@ class Doc_Management:
         
         print('Inserting to DB...')
         self.db.open()
-        self.db.insert('docs_table', {"source": source, "summary": doc_summary, "page_nums": page_nums, "chunk_nums": chunk_nums, "embedding": pickle.dumps(doc_emb)})
+        self.db.insert('docs_table', {"source": source, "gen_title": doc_title, "summary": doc_summary, "page_nums": page_nums, "chunk_nums": chunk_nums, "embedding": pickle.dumps(doc_emb)})
         # for i, chunk in enumerate(chunks):
         #     self.db.insert('chunks_table', {"source": source, "page_span": str(i+1), "page_text": pages_list[i], "summary": page_summaries[i], "embedding": pickle.dumps(page_embs[i])})
         for chunk in chunks:
@@ -897,6 +976,6 @@ class Doc_Management:
     def del_doc(self, source):
         self.db.open()
         self.db.delete('docs_table', {"source": source})
-        self.db.delete('pages_table', {"source": source})
+        # self.db.delete('pages_table', {"source": source})
         self.db.delete('chunks_table', {"source": source})
         self.db.close()
