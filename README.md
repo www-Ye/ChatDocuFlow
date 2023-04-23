@@ -12,6 +12,8 @@ Current include:
 
 * Chunk-level conversational question-answering (directly using natural language dialogue to locate the corresponding chunk in the article and engage in conversational question-answering)
 
+* Simple graphical user interface for chunk-level conversational question-answering.
+
 To be added:
 
 * Semantic tags (newly added papers are automatically added to semantically similar tags)
@@ -112,6 +114,8 @@ Storage in SQLite database. / sqlite数据库存储
 * 进入论文后可以进行会话问答，（通过每一块回答问题最后合并总结）
 
 * 文本块级对话（直接通过自然语言对话定位到对应文章的块，并进行会话问答）
+
+* 文本块级对话的简单可视化界面
 
 将要加入：
 

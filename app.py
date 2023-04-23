@@ -162,8 +162,8 @@ parser.add_argument("--doc_range_distance", default=0.4, type=float, help="The d
 parser.add_argument("--chunk_range_distance", default=0.3, type=float, help="The chunk retrieval threshold returns higher similarity for closer distances.")
 parser.add_argument("--system", default="windows", type=str, help="windows/mac")
 
-parser.add_argument("--openai_key", default="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", type=str)
-parser.add_argument("--proxy", default="127.0.0.1:13454", type=str)
+parser.add_argument("--openai_key", default="", type=str)
+parser.add_argument("--proxy", default="", type=str)
 
 args = parser.parse_args()
 
