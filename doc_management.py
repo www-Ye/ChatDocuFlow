@@ -417,7 +417,7 @@ class Doc_Management:
             threshold = 0.4
             pages = []
             chunks = set()
-            while (len(contexts) == 0) and (threshold <= 0.55):
+            while (len(contexts) < 3) and (threshold <= 0.55):
                 for idx in range(len(chunk_infos)):
                     chunk_emb = chunk_embs[idx]
                     l2_distance = np.linalg.norm(question_emb - chunk_emb)
@@ -494,7 +494,7 @@ class Doc_Management:
             threshold = 0.2
             filtered_indices = []
             k = len(self.id2chunk)
-            while (len(filtered_indices) == 0) and (threshold <= self.chunk_range_distance + 0.2):
+            while (len(filtered_indices) < 5) and (threshold <= self.chunk_range_distance + 0.2):
                 D, I = self.chunk_index.search(question_emb, k)
                 D, I = D[0], I[0]
                 filtered_indices = I[D < threshold]
