@@ -3,7 +3,7 @@ import os
 import time
 
 class LLM_Operater:
-    def __init__(self, openai_key, proxy="", model="gpt-3.5-turbo"):
+    def __init__(self, openai_key, proxy="", model="gpt-3.5-turbo-16k"):
         # Connect to the OpenAI API.
         if proxy != "":
             os.environ["http_proxy"] = proxy
