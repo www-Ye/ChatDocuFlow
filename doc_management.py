@@ -853,7 +853,7 @@ class Doc_Management:
                 span_tokens = self.tokenizer.encode(span)
                 sum_span_tokens += len(span_tokens)
             avg_span_tokens_nums = 1. * sum_span_tokens / len(old_spans)
-            span = int(32000. / avg_span_tokens_nums)
+            span = int(8192. / avg_span_tokens_nums)
             span_overlap = int(span * 0.2)
             print(f'span:{span}  span_overlap:{span_overlap}')
             start = 0
