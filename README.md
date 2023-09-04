@@ -1,6 +1,7 @@
 # Document/Paper Management System based on OpenAI API/ChatGPT
 
 This is a document/paper management system that allows users to add all PDFs in a folder and index them using OpenAI's embedding technology. Users can retrieve documents through natural language search or tags. After selecting a document/paper, they can engage in conversational question-answering to learn more about the paper. It is also possible to directly retrieve similar text chunks and conduct conversational Q&A at the chunk-level. The session function remembers the context of the previous 3 interactions.
+By incorporating question rewriting, the accuracy of both single-turn and multi-turn retrieval has been improved.
 
 Current include:
 
@@ -106,6 +107,7 @@ Storage in SQLite database. / sqlite数据库存储
 # 基于OpenAI API/ChatGPT的文档/论文管理系统
 
 这是一个文档/论文管理系统，允许用户添加文件夹中的所有PDF，并使用OpenAI的嵌入技术对其进行索引。用户可以通过自然语言搜索或者标签来检索文档。在选中文档/论文后可以进行会话问答以了解有关论文的问题。也可以直接检索相似文本块，进行文本块级会话问答。会话功能记住3次交互上下文。
+加入了问题重写部分提高了检索的单轮和多轮检索的准确率。
 
 目前包含功能：
 

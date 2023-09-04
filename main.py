@@ -7,7 +7,7 @@ def main():
     parser = argparse.ArgumentParser()
 
     parser.add_argument("--doc_dir", default="docs", type=str)
-    parser.add_argument("--db_name", default="docuflow.db", type=str)
+    parser.add_argument("--db_name", default="cache/docuflow.db", type=str)
     parser.add_argument("--language", default="Chinese", type=str)
     parser.add_argument("--doc_range_distance", default=0.4, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
     parser.add_argument("--chunk_range_distance", default=0.3, type=float, help="The chunk retrieval threshold returns higher similarity for closer distances.")

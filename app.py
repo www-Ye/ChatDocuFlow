@@ -27,6 +27,10 @@ def answer_generator(question):
         messages_context = messages_context[-6:]
 
         question_context = '\n'.join(messages_context) + '\n' + question
+        rewrite_question_prompt = f'{question_context}\n\n根据以上部分重写用户想问的问题：'
+        question_context = DM.llm_op.prompt_generation(rewrite_question_prompt)
+        print(question_context)
+        # print(asd)
         # print(question_context)
         question_emb = np.array(DM.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
         # print(question_emb)
@@ -44,7 +48,7 @@ def answer_generator(question):
         contexts = []
         sources_info_dict = {}
         if len(filtered_indices) > 0:
-            for i, idx in enumerate(filtered_indices):
+            for i, idx in enumerate(filtered_indices[:50]):
                 tmp = DM.id2chunk[str(idx)]
                 source = tmp['source']
                 source_gen_title = tmp['source_gen_title']
@@ -62,6 +66,8 @@ def answer_generator(question):
                     sources_info_dict[source_info]['chunks'].add(chunk_id)
                 prompt_text = f'page_span: {page_span}\nchunk_id: {chunk_id}]\nchunk_text: {chunk_text}'
                 contexts.append(f'source: {source}\n' + prompt_text)
+
+                # yield chunk_text
         related_doc = ''
         for key, v in sources_info_dict.items():
             # print(key)
@@ -156,7 +162,7 @@ def index():
 parser = argparse.ArgumentParser()
 
 parser.add_argument("--doc_dir", default="docs", type=str)
-parser.add_argument("--db_name", default="docuflow.db", type=str)
+parser.add_argument("--db_name", default="cache/docuflow.db", type=str)
 parser.add_argument("--language", default="Chinese", type=str)
 parser.add_argument("--doc_range_distance", default=0.4, type=float, help="The doc retrieval threshold returns higher similarity for closer distances.")
 parser.add_argument("--chunk_range_distance", default=0.3, type=float, help="The chunk retrieval threshold returns higher similarity for closer distances.")

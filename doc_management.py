@@ -162,9 +162,14 @@ class Doc_Management:
 
         add_nums = 0
         for item in add_list:
-            if(item.endswith('.pdf')):
+            if (item.endswith('.pdf')):
                 print('Add {} to the DB'.format(item))
                 pages_list = self.parse_pdf(os.path.join(self.doc_dir, item))
+                self.add_doc(item, pages_list)
+                add_nums += 1
+            if (item.endswith('.txt')):
+                print('Add {} to the DB'.format(item))
+                # pages_list = self.parse_pdf(os.path.join(self.doc_dir, item))
                 self.add_doc(item, pages_list)
                 add_nums += 1
 
@@ -409,6 +414,9 @@ class Doc_Management:
             # print('Q:', question)
 
             question_context = '\n'.join(source_messages_context + messages_context) + '\n' + question
+            rewrite_question_prompt = f'{question_context}\n\n根据以上部分重写用户想问的问题：'
+            question_context = self.llm_op.prompt_generation(rewrite_question_prompt)
+            print('rewite_question:', question_context)
             # print(question_context)
             question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
@@ -489,6 +497,9 @@ class Doc_Management:
             # print('Q:', question)
 
             question_context = '\n'.join(messages_context) + '\n' + question
+            rewrite_question_prompt = f'{question_context}\n\n根据以上部分重写用户想问的问题：'
+            question_context = self.llm_op.prompt_generation(rewrite_question_prompt)
+            print('rewite_question:', question_context)
             question_emb = np.array(self.llm_op.get_embedding(question_context)).astype('float32').reshape(1, -1)
 
             threshold = 0.2
@@ -506,7 +517,7 @@ class Doc_Management:
             contexts = []
             sources_info_dict = {}
             if len(filtered_indices) > 0:
-                for i, idx in enumerate(filtered_indices):
+                for i, idx in enumerate(filtered_indices[:50]):
                     tmp = self.id2chunk[str(idx)]
                     source = tmp['source']
                     source_gen_title = tmp['source_gen_title']
@@ -853,7 +864,7 @@ class Doc_Management:
                 span_tokens = self.tokenizer.encode(span)
                 sum_span_tokens += len(span_tokens)
             avg_span_tokens_nums = 1. * sum_span_tokens / len(old_spans)
-            span = int(3072. / avg_span_tokens_nums)
+            span = int(8192. / avg_span_tokens_nums)
             span_overlap = int(span * 0.2)
             print(f'span:{span}  span_overlap:{span_overlap}')
             start = 0
